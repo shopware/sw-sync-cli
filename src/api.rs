@@ -36,7 +36,7 @@ impl SwClient {
         let start_instant = Instant::now();
         println!(
             "sync {:?} {} with payload size {}",
-            &action,
+            action,
             &entity,
             payload.len()
         );
@@ -141,7 +141,7 @@ struct SyncOperation<T> {
     payload: Vec<T>,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Clone, Copy, Serialize)]
 #[serde(rename_all = "lowercase")]
 pub enum SyncAction {
     Upsert,
