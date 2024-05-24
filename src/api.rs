@@ -124,8 +124,8 @@ struct AuthBody {
 
 #[derive(Debug, Deserialize)]
 struct AuthResponse {
-    _token_type: String,
-    _expires_in: u32,
+    token_type: String,
+    expires_in: u32,
     access_token: String,
 }
 
@@ -145,5 +145,5 @@ struct SyncOperation<T> {
 #[serde(rename_all = "lowercase")]
 pub enum SyncAction {
     Upsert,
-    _Delete,
+    Delete,
 }
