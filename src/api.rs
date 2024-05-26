@@ -1,10 +1,10 @@
 use crate::config::Credentials;
 use anyhow::anyhow;
-use anyhow::Context;
-use reqwest::{Client, Response};
+use reqwest::{Client, Response, StatusCode};
 use serde::{Deserialize, Serialize};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
+use thiserror::Error;
 
 #[derive(Debug, Clone)]
 pub struct SwClient {
@@ -30,8 +30,8 @@ impl SwClient {
         &self,
         entity: S,
         action: SyncAction,
-        payload: Vec<T>,
-    ) -> anyhow::Result<()> {
+        payload: &[T],
+    ) -> Result<(), SwApiError> {
         let entity: String = entity.into();
         let start_instant = Instant::now();
         println!(
@@ -63,12 +63,8 @@ impl SwClient {
 
         if !res.status().is_success() {
             let status = res.status();
-            let body: serde_json::Value = res.json().await?;
-            return Err(anyhow!(
-                "Sync request failed, status {} and body:\n{:#?}",
-                status,
-                body
-            ));
+            let body: SwErrorBody = Self::deserialize(res).await?;
+            return Err(SwApiError::Server(status, body));
         }
 
         println!(
@@ -93,22 +89,30 @@ impl SwClient {
             .send()
             .await?;
 
+        if !res.status().is_success() {
+            let status = res.status();
+            let body: serde_json::Value = res.json().await?;
+            return Err(anyhow!(
+                "Failed to authenticate, got {} with body:\n{}",
+                status,
+                serde_json::to_string_pretty(&body)?
+            ));
+        }
+
         let res = Self::deserialize(res).await?;
 
         Ok(res)
     }
 
-    async fn deserialize<T: for<'a> Deserialize<'a>>(response: Response) -> anyhow::Result<T> {
+    async fn deserialize<T: for<'a> Deserialize<'a>>(response: Response) -> Result<T, SwApiError> {
         let text = response.text().await?;
 
         match serde_json::from_str(&text) {
             Ok(t) => Ok(t),
-            Err(e) => {
+            Err(_e) => {
                 let body: serde_json::Value = serde_json::from_str(&text)?;
-
-                Err(e).context(format!(
-                    "failed to deserialize json into schema:\n{:#?}",
-                    body
+                Err(SwApiError::DeserializeIntoSchema(
+                    serde_json::to_string_pretty(&body)?,
                 ))
             }
         }
@@ -124,21 +128,21 @@ struct AuthBody {
 
 #[derive(Debug, Deserialize)]
 struct AuthResponse {
-    token_type: String,
-    expires_in: u32,
+    // token_type: String,
+    // expires_in: u32,
     access_token: String,
 }
 
 #[derive(Debug, Serialize)]
-struct SyncBody<T> {
-    write_data: SyncOperation<T>,
+struct SyncBody<'a, T> {
+    write_data: SyncOperation<'a, T>,
 }
 
 #[derive(Debug, Serialize)]
-struct SyncOperation<T> {
+struct SyncOperation<'a, T> {
     entity: String,
     action: SyncAction,
-    payload: Vec<T>,
+    payload: &'a [T],
 }
 
 #[derive(Debug, Clone, Copy, Serialize)]
@@ -146,4 +150,34 @@ struct SyncOperation<T> {
 pub enum SyncAction {
     Upsert,
     Delete,
+}
+
+#[derive(Debug, Error)]
+pub enum SwApiError {
+    #[error("The server returned an {0} error response:\n{1:#?}")]
+    Server(StatusCode, SwErrorBody),
+    #[error("Request error: {0}")]
+    Request(#[from] reqwest::Error),
+    #[error("JSON error: {0}")]
+    Json(#[from] serde_json::Error),
+    #[error("failed to deserialize json into schema:\n{0}")]
+    DeserializeIntoSchema(String),
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+pub struct SwErrorBody {
+    pub errors: Vec<SwError>,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+pub struct SwError {
+    pub code: String,
+    pub detail: String,
+    pub source: SwErrorSource,
+    pub template: String,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+pub struct SwErrorSource {
+    pub pointer: String,
 }

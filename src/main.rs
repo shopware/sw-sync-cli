@@ -1,4 +1,4 @@
-use crate::api::{SwClient, SyncAction};
+use crate::api::{SwApiError, SwClient, SyncAction};
 use crate::config::Credentials;
 use anyhow::Context;
 use itertools::Itertools;
@@ -53,11 +53,34 @@ async fn main() -> anyhow::Result<()> {
     });
 
     let mut join_handles = vec![];
-    for sync_values in &iter.chunks(payload_size) {
-        let chunk: Vec<serde_json::Value> = sync_values.collect();
+    for sync_values in &iter.enumerate().chunks(payload_size) {
+        let (mut row_indices, mut chunk): (Vec<usize>, Vec<serde_json::Value>) =
+            sync_values.unzip();
         let sw_client = sw_client.clone();
         join_handles.push(tokio::spawn(async move {
-            sw_client.sync("product", SyncAction::Upsert, chunk).await
+            match sw_client.sync("product", SyncAction::Upsert, &chunk).await {
+                Ok(()) => Ok(()),
+                Err(SwApiError::Server(_, body)) => {
+                    for err in body.errors.iter().rev() {
+                        const PREFIX: &str = "/write_data/";
+                        let (entry_str , remaining_pointer)= &err.source.pointer[PREFIX.len()..].split_once('/').expect("error pointer");
+                        let entry: usize = entry_str.parse().expect("error pointer should contain usize");
+
+                        let row_index = row_indices.remove(entry);
+                        let row = chunk.remove(entry);
+                        println!(
+                            "server validation error on row {}: {} Remaining pointer {} ignored payload:\n{}",
+                            row_index + 2,
+                            err.detail,
+                            remaining_pointer,
+                            serde_json::to_string_pretty(&row)?,
+                        );
+                    }
+                    // retry
+                    sw_client.sync("product", SyncAction::Upsert, &chunk).await
+                },
+                Err(e) => Err(e),
+            }
         }));
     }
 
