@@ -4,8 +4,6 @@ use anyhow::Context;
 use serde_json::Value;
 use std::cmp;
 use std::sync::Arc;
-use tokio::fs::File;
-use tokio::io::AsyncWriteExt;
 use tokio::sync::mpsc;
 
 pub async fn export(context: Arc<SyncContext>) -> anyhow::Result<()> {
@@ -22,7 +20,10 @@ pub async fn export(context: Arc<SyncContext>) -> anyhow::Result<()> {
     // start writer task
     let (writer_tx, writer_rx) = mpsc::channel::<WriterMessage>(64);
     let writer_context = Arc::clone(&context);
-    let writer_task = tokio::spawn(async move { write_to_file(writer_rx, &writer_context).await });
+    let writer_task =
+        tokio::task::spawn_blocking(
+            || async move { write_to_file(writer_rx, &writer_context).await },
+        );
 
     // submit request tasks
     let mut request_tasks = vec![];
@@ -48,7 +49,7 @@ pub async fn export(context: Arc<SyncContext>) -> anyhow::Result<()> {
     }
 
     // wait for writer to finish
-    writer_task.await??;
+    writer_task.await?.await?;
 
     Ok(())
 }
@@ -96,7 +97,7 @@ async fn write_to_file(
 async fn process_request(
     page: u64,
     chunk_limit: u64,
-    mut writer_tx: mpsc::Sender<WriterMessage>,
+    writer_tx: mpsc::Sender<WriterMessage>,
     context: &SyncContext,
 ) -> anyhow::Result<()> {
     println!(
@@ -113,8 +114,8 @@ async fn process_request(
         let mut row = Vec::with_capacity(context.schema.mappings.len());
         for mapping in &context.schema.mappings {
             match mapping {
-                Mapping::ByPath(byPathMapping) => {
-                    let value = match byPathMapping.entity_path.as_ref() {
+                Mapping::ByPath(by_path_mapping) => {
+                    let value = match by_path_mapping.entity_path.as_ref() {
                         "id" => {
                             &serde_json::Value::String(entity.id.to_string())
                         }

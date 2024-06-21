@@ -1,10 +1,8 @@
-use crate::api::{SwApiError, SwClient, SyncAction};
+use crate::api::SwClient;
 use crate::config::{Credentials, Schema};
 use crate::data::{export, import};
 use anyhow::Context;
 use clap::{ArgAction, Parser, Subcommand};
-use itertools::Itertools;
-use serde_json::json;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Instant;
