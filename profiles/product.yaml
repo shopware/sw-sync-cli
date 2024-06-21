@@ -10,23 +10,38 @@ mappings:
     entity_path: "stock"
   - file_column: "tax id"
     entity_path: "taxId"
-#  - file_column: "translations.DEFAULT.name"
-#    entity_path: "translations.DEFAULT.name"
-#
-#  - file_column: "price.DEFAULT.net"
-#  - file_column: "price.DEFAULT.gross"
-#
-#transform:
-#  price:
-#    serialize: |
-#      return {
-#        "price.DEFAULT.net": value[0].net,
-#        "price.DEFAULT.gross": value[0].gross,
-#      };
-#    deserialize: |
-#      return [{
-#        net: row["price.DEFAULT.net"],
-#        gross: row["price.DEFAULT.gross"],
-#        linked: false,
-#        currencyId: currencies['EUR']
-#      }];
+  - file_column: "gross price EUR"
+    key: "gross_price_eur"
+  - file_column: "net price EUR"
+    key: "net_price_eur"
+serialize_script: |
+  // See https://rhai.rs/book/ for scripting language documentation
+  // you receive an entity object, which consists of the whole entity API response for that single entity
+  // you also receive an empty row object where the specified keys above are missing (you need to set them)
+  // the other simple mappings are executed (added to the row object) after this script
+  
+  // debugging utils
+  // debug(entity); // contains the full entity object from the API (can be huge!)
+  // print(row); // will be empty
+  
+  // ToDo: add convenience function to lookup currencyId by iso code
+  let price = entity.price.find(|p| p.currencyId == "b7d2554b0ce847cd82f3ac9bd1c0dfca");
+  row.gross_price_eur = price.gross;
+  row.net_price_eur = price.net;
+
+deserialize_script: |
+  // See https://rhai.rs/book/ for scripting language documentation
+  // you receive 'row' as an object that has all the keys defined above with the corresponding value
+  // you also receive an empty entity object, where you need to resolve your keys
+  // the other simple mappings are executed (added to the entity object) after this script
+  
+  // print(entity); // will be empty
+  // debug(row); // will contain only the specified keys + their values
+  
+  entity.price = [];
+  entity.price.push(#{
+    gross: row.gross_price_eur,
+    net: row.net_price_eur,
+    linked: true,
+    currencyId: "b7d2554b0ce847cd82f3ac9bd1c0dfca",
+  });

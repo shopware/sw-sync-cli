@@ -1,6 +1,6 @@
 use crate::api::SwClient;
 use crate::config::{Credentials, Schema};
-use crate::data::{export, import};
+use crate::data::{export, import, prepare_scripting_environment, ScriptingEnvironment};
 use anyhow::Context;
 use clap::{ArgAction, Parser, Subcommand};
 use std::path::PathBuf;
@@ -82,6 +82,7 @@ pub struct SyncContext {
     pub file: PathBuf,
     pub limit: Option<u64>,
     pub verbose: bool,
+    pub scripting_environment: ScriptingEnvironment,
 }
 
 #[tokio::main]
@@ -162,9 +163,13 @@ async fn create_context(
 
     // ToDo: create lookup table for languages + currencies?
 
+    let scripting_environment =
+        prepare_scripting_environment(&schema.serialize_script, &schema.deserialize_script)?;
+
     Ok(SyncContext {
         sw_client,
         schema,
+        scripting_environment,
         file,
         limit,
         verbose,

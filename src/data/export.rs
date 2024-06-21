@@ -1,4 +1,3 @@
-use crate::config::Mapping;
 use crate::data::transform::serialize_entity;
 use crate::SyncContext;
 use std::cmp;
@@ -126,11 +125,7 @@ fn get_header_line(context: &SyncContext) -> Vec<String> {
     let mut columns = vec![];
 
     for mapping in &context.schema.mappings {
-        match mapping {
-            Mapping::ByPath(by_path_mapping) => {
-                columns.push(by_path_mapping.file_column.clone());
-            }
-        }
+        columns.push(mapping.get_file_column().to_owned());
     }
 
     columns
