@@ -2,6 +2,7 @@ use crate::config::Credentials;
 use anyhow::anyhow;
 use reqwest::{Client, Response, StatusCode};
 use serde::{Deserialize, Serialize};
+use serde_json::json;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 use thiserror::Error;
@@ -50,7 +51,7 @@ impl SwClient {
             },
         };
 
-        let res = self
+        let response = self
             .client
             .post(format!("{}/api/_action/sync", self.credentials.base_url))
             .bearer_auth(access_token)
@@ -61,9 +62,9 @@ impl SwClient {
             .send()
             .await?;
 
-        if !res.status().is_success() {
-            let status = res.status();
-            let body: SwErrorBody = Self::deserialize(res).await?;
+        if !response.status().is_success() {
+            let status = response.status();
+            let body: SwErrorBody = Self::deserialize(response).await?;
             return Err(SwApiError::Server(status, body));
         }
 
@@ -75,11 +76,112 @@ impl SwClient {
         Ok(())
     }
 
+    pub async fn entity_schema(
+        &self,
+    ) -> Result<serde_json::Map<String, serde_json::Value>, SwApiError> {
+        // ToDo: implement retry on auth fail
+        let access_token = self.access_token.lock().unwrap().clone();
+        let response = self
+            .client
+            .get(format!(
+                "{}/api/_info/entity-schema.json",
+                self.credentials.base_url
+            ))
+            .bearer_auth(access_token)
+            .send()
+            .await?;
+
+        if !response.status().is_success() {
+            let status = response.status();
+            let body: SwErrorBody = Self::deserialize(response).await?;
+            return Err(SwApiError::Server(status, body));
+        }
+
+        let value = Self::deserialize(response).await?;
+        Ok(value)
+    }
+
+    /// entity should be provided as kebab-case instead of snake_case
+    pub async fn get_total(&self, entity: &str) -> Result<u64, SwApiError> {
+        // ToDo: implement retry on auth fail
+        let access_token = self.access_token.lock().unwrap().clone();
+
+        let response = self
+            .client
+            .post(format!(
+                "{}/api/search/{}",
+                self.credentials.base_url, entity
+            ))
+            .bearer_auth(access_token)
+            .json(&json!({
+                "limit": 1,
+                "aggregations": [
+                    {
+                      "name": "count",
+                      "type": "count",
+                      "field": "id"
+                    }
+                ]
+            }))
+            .send()
+            .await?;
+
+        if !response.status().is_success() {
+            let status = response.status();
+            let body: SwErrorBody = Self::deserialize(response).await?;
+            return Err(SwApiError::Server(status, body));
+        }
+
+        let value: serde_json::Value = Self::deserialize(response).await?;
+
+        let count = value
+            .pointer("/aggregations/count/count")
+            .expect("failed to get /aggregations/count/count from response");
+        let count = count
+            .as_u64()
+            .expect("count aggregation value is not a unsigned integer");
+
+        Ok(count)
+    }
+
+    /// entity should be provided as kebab-case instead of snake_case
+    pub async fn list(
+        &self,
+        entity: &str,
+        page: u64,
+        limit: u64,
+    ) -> Result<SwListResponse, SwApiError> {
+        // ToDo: implement retry on auth fail
+        let access_token = self.access_token.lock().unwrap().clone();
+        let response = self
+            .client
+            .post(format!(
+                "{}/api/search/{}",
+                self.credentials.base_url, entity
+            ))
+            .bearer_auth(access_token)
+            .json(&json!({
+                "page": page,
+                "limit": limit
+            }))
+            .send()
+            .await?;
+
+        if !response.status().is_success() {
+            let status = response.status();
+            let body: SwErrorBody = Self::deserialize(response).await?;
+            return Err(SwApiError::Server(status, body));
+        }
+
+        let value: SwListResponse = Self::deserialize(response).await?;
+        Ok(value)
+    }
+
     async fn authenticate(
         client: &Client,
         credentials: &Credentials,
     ) -> anyhow::Result<AuthResponse> {
-        let res = client
+        let response = client
             .post(format!("{}/api/oauth/token", credentials.base_url))
             .json(&AuthBody {
                 grant_type: "client_credentials".into(),
@@ -89,9 +191,9 @@ impl SwClient {
             .send()
             .await?;
 
-        if !res.status().is_success() {
-            let status = res.status();
-            let body: serde_json::Value = res.json().await?;
+        if !response.status().is_success() {
+            let status = response.status();
+            let body: serde_json::Value = response.json().await?;
             return Err(anyhow!(
                 "Failed to authenticate, got {} with body:\n{}",
                 status,
@@ -99,7 +201,7 @@ impl SwClient {
             ));
         }
 
-        let res = Self::deserialize(res).await?;
+        let res = Self::deserialize(response).await?;
 
         Ok(res)
     }
@@ -180,4 +282,16 @@ pub struct SwError {
 #[derive(Debug, Deserialize, Serialize)]
 pub struct SwErrorSource {
     pub pointer: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct SwListResponse {
+    pub data: Vec<SwListEntity>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct SwListEntity {
+    pub id: String,
+    pub r#type: String,
+    pub attributes: serde_json::Map<String, serde_json::Value>,
 }

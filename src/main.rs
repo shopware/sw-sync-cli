@@ -1,93 +1,174 @@
 use crate::api::{SwApiError, SwClient, SyncAction};
-use crate::config::Credentials;
+use crate::config::{Credentials, Schema};
+use crate::data::{export, import};
 use anyhow::Context;
+use clap::{ArgAction, Parser, Subcommand};
 use itertools::Itertools;
 use serde_json::json;
+use std::path::PathBuf;
+use std::sync::Arc;
 use std::time::Instant;
 
 mod api;
 mod config;
+mod data;
+
+#[derive(Parser)]
+#[command(version, about, long_about = None)]
+struct Cli {
+    #[command(subcommand)]
+    command: Commands,
+}
+
+#[derive(Subcommand)]
+enum Commands {
+    /// Authenticate with a given shopware shop via integration admin API.
+    /// Credentials are stored in .credentials.toml in the current working directory.
+    Auth {
+        /// base URL of the shop
+        #[arg(short, long)]
+        domain: String,
+
+        /// access_key_id
+        #[arg(short, long)]
+        id: String,
+
+        /// access_key_secret
+        #[arg(short, long)]
+        secret: String,
+    },
+
+    /// Import data into shopware
+    Import {
+        /// Path to schema.yaml
+        #[arg(short, long)]
+        schema: PathBuf,
+
+        /// Path to input data file
+        #[arg(short, long)]
+        input: PathBuf,
+
+        /// Maximum amount of entities, can be used for debugging
+        #[arg(short, long)]
+        limit: Option<u64>,
+
+        /// Verbose output, used for debugging
+        #[arg(short, long, action = ArgAction::SetTrue)]
+        verbose: bool,
+    },
+    /// Export data out of shopware into a file
+    Export {
+        /// Path to schema.yaml
+        #[arg(short, long)]
+        schema: PathBuf,
+
+        /// Path to output file
+        #[arg(short, long)]
+        output: PathBuf,
+
+        /// Maximum amount of entities, can be used for debugging
+        #[arg(short, long)]
+        limit: Option<u64>,
+
+        /// Verbose output, used for debugging
+        #[arg(short, long, action = ArgAction::SetTrue)]
+        verbose: bool,
+    },
+}
+
+#[derive(Debug)]
+pub struct SyncContext {
+    pub sw_client: SwClient,
+    pub schema: Schema,
+    /// specifies the input or output file
+    pub file: PathBuf,
+    pub limit: Option<u64>,
+    pub verbose: bool,
+}
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let start_instant = Instant::now();
-    let payload_size = std::env::args().nth(1).map_or(200usize, |s| {
-        s.parse()
-            .expect("invalid argument, provide a number for payload_size")
-    });
-    let credentials = tokio::fs::read_to_string("./.credentials.toml")
-        .await
-        .context("can't read ./.credentials.toml")?;
-    let credentials: Credentials = toml::from_str(&credentials)?;
-    let currency_id = "b7d2554b0ce847cd82f3ac9bd1c0dfca";
+    let cli = Cli::parse();
 
-    let sw_client = SwClient::new(credentials).await?;
-
-    // todo move blocking call to separate thread
-    let mut csv_reader = csv::ReaderBuilder::new()
-        .delimiter(b';')
-        .from_path("./data/10kProducts.csv")?;
-    let headers = csv_reader.headers()?.clone();
-    println!("CSV headers: {:?}", headers);
-
-    let iter = csv_reader.records().map(|r| {
-        let result = r.unwrap();
-
-        let sync_product = json!({
-            "id": result[0],
-            "taxId": result[5],
-            "price": [
-                {
-                    "currencyId": currency_id,
-                    "net": result[1].parse::<f64>().unwrap(),
-                    "gross": result[2].parse::<f64>().unwrap(),
-                    "linked": false,
-                }
-            ],
-            "name": result[6],
-            "productNumber": result[3],
-            "stock": result[4].parse::<i32>().unwrap(),
-        });
-
-        sync_product
-    });
-
-    let mut join_handles = vec![];
-    for sync_values in &iter.enumerate().chunks(payload_size) {
-        let (mut row_indices, mut chunk): (Vec<usize>, Vec<serde_json::Value>) =
-            sync_values.unzip();
-        let sw_client = sw_client.clone();
-        join_handles.push(tokio::spawn(async move {
-            match sw_client.sync("product", SyncAction::Upsert, &chunk).await {
-                Ok(()) => Ok(()),
-                Err(SwApiError::Server(_, body)) => {
-                    for err in body.errors.iter().rev() {
-                        const PREFIX: &str = "/write_data/";
-                        let (entry_str , remaining_pointer)= &err.source.pointer[PREFIX.len()..].split_once('/').expect("error pointer");
-                        let entry: usize = entry_str.parse().expect("error pointer should contain usize");
-
-                        let row_index = row_indices.remove(entry);
-                        let row = chunk.remove(entry);
-                        println!(
-                            "server validation error on row {}: {} Remaining pointer {} ignored payload:\n{}",
-                            row_index + 2,
-                            err.detail,
-                            remaining_pointer,
-                            serde_json::to_string_pretty(&row)?,
-                        );
-                    }
-                    // retry
-                    sw_client.sync("product", SyncAction::Upsert, &chunk).await
-                },
-                Err(e) => Err(e),
-            }
-        }));
+    match cli.command {
+        Commands::Auth { domain, id, secret } => {
+            auth(domain, id, secret).await?;
+            println!("Successfully authenticated. You can continue with other commands now.")
+        }
+        Commands::Import {
+            schema,
+            input,
+            limit,
+            verbose,
+        } => {
+            let context = create_context(schema, input, limit, verbose).await?;
+            import(Arc::new(context)).await?;
+            println!("Imported successfully");
+        }
+        Commands::Export {
+            schema,
+            output,
+            limit,
+            verbose,
+        } => {
+            let context = create_context(schema, output, limit, verbose).await?;
+            export(Arc::new(context)).await?;
+            println!("Exported successfully");
+        }
     }
 
-    for join_handle in join_handles {
-        join_handle.await??;
-    }
+    println!(
+        "This whole command executed in {:.3}s",
+        start_instant.elapsed().as_secs_f32()
+    );
 
-    println!("Finished after {} ms", start_instant.elapsed().as_millis());
     Ok(())
+}
+
+async fn auth(domain: String, id: String, secret: String) -> anyhow::Result<()> {
+    let credentials = Credentials {
+        base_url: domain.trim_end_matches('/').to_string(),
+        access_key_id: id,
+        access_key_secret: secret,
+    };
+
+    // check if credentials work
+    let _ = SwClient::new(credentials.clone()).await?;
+
+    // write them to file
+    let serialized = toml::to_string(&credentials)?;
+    tokio::fs::write("./.credentials.toml", serialized).await?;
+
+    Ok(())
+}
+
+async fn create_context(
+    schema: PathBuf,
+    file: PathBuf,
+    limit: Option<u64>,
+    verbose: bool,
+) -> anyhow::Result<SyncContext> {
+    let serialized_credentials = tokio::fs::read_to_string("./.credentials.toml")
+        .await
+        .context("No .credentials.toml found. Call command auth first.")?;
+    let credentials: Credentials = toml::from_str(&serialized_credentials)?;
+    let sw_client = SwClient::new(credentials).await?;
+    // ToDo: lookup entities.json definitions
+
+    let serialized_schema = tokio::fs::read_to_string(schema)
+        .await
+        .context("No provided schema file not found")?;
+    let schema: Schema = serde_yaml::from_str(&serialized_schema)?;
+    // ToDo: schema verification
+
+    // ToDo: create lookup table for languages + currencies?
+
+    Ok(SyncContext {
+        sw_client,
+        schema,
+        file,
+        limit,
+        verbose,
+    })
 }

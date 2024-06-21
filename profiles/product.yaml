@@ -1,0 +1,32 @@
+entity: product
+mappings:
+  - file_column: "id"
+    entity_path: "id"
+  - file_column: "name"
+    entity_path: "name"
+  - file_column: "productNumber"
+    entity_path: "productNumber"
+  - file_column: "stock"
+    entity_path: "stock"
+  - file_column: "taxId"
+    entity_path: "taxId"
+#  - file_column: "translations.DEFAULT.name"
+#    entity_path: "translations.DEFAULT.name"
+#
+#  - file_column: "price.DEFAULT.net"
+#  - file_column: "price.DEFAULT.gross"
+#
+#transform:
+#  price:
+#    serialize: |
+#      return {
+#        "price.DEFAULT.net": value[0].net,
+#        "price.DEFAULT.gross": value[0].gross,
+#      };
+#    deserialize: |
+#      return [{
+#        net: row["price.DEFAULT.net"],
+#        gross: row["price.DEFAULT.gross"],
+#        linked: false,
+#        currencyId: currencies['EUR']
+#      }];

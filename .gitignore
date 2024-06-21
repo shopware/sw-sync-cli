@@ -2,5 +2,6 @@
 .vscode
 
 /target
+/data
 
 .credentials.toml
