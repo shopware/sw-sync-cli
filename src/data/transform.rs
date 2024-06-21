@@ -1,3 +1,4 @@
+use std::str::FromStr;
 use crate::api::SwListEntity;
 use crate::config::Mapping;
 use crate::SyncContext;
@@ -23,14 +24,27 @@ pub fn deserialize_row(
                         by_path_mapping.file_column
                     ))?;
 
-                let value = row
+
+                let raw_value = row
                     .get(column_index)
                     .context("failed to get column of row")?;
-                // ToDo: properly deserialize into different json types
+                let raw_value_lowercase = raw_value.to_lowercase();
+
+                let json_value = if raw_value_lowercase == "null" {
+                    serde_json::Value::Null
+                } else if raw_value_lowercase == "true" {
+                    serde_json::Value::Bool(true)
+                } else if raw_value_lowercase == "false" {
+                    serde_json::Value::Bool(false)
+                } else if let Ok(number) = serde_json::Number::from_str(raw_value) {
+                    serde_json::Value::Number(number)
+                } else {
+                    serde_json::Value::String(raw_value.to_owned())
+                };
 
                 entity.insert(
                     by_path_mapping.entity_path.clone(),
-                    serde_json::Value::String(value.to_owned()),
+                    json_value
                 );
             }
         }
