@@ -101,8 +101,10 @@ impl SwClient {
         Ok(value)
     }
 
-    /// entity should be provided as kebab-case instead of snake_case
     pub async fn get_total(&self, entity: &str) -> Result<u64, SwApiError> {
+        // entity needs to be provided as kebab-case instead of snake_case
+        let entity = entity.replace('_', "-");
+
         // ToDo: implement retry on auth fail
         let access_token = self.access_token.lock().unwrap().clone();
 
@@ -144,13 +146,15 @@ impl SwClient {
         Ok(count)
     }
 
-    /// entity should be provided as kebab-case instead of snake_case
     pub async fn list(
         &self,
         entity: &str,
         page: u64,
         limit: u64,
     ) -> Result<SwListResponse, SwApiError> {
+        // entity needs to be provided as kebab-case instead of snake_case
+        let entity = entity.replace('_', "-");
+
         // ToDo: implement retry on auth fail
         let access_token = self.access_token.lock().unwrap().clone();
         let response = self

@@ -1,7 +1,6 @@
 use crate::config::Mapping;
+use crate::data::transform::serialize_entity;
 use crate::SyncContext;
-use anyhow::Context;
-use serde_json::Value;
 use std::cmp;
 use std::sync::Arc;
 use tokio::sync::mpsc;
@@ -64,7 +63,9 @@ async fn write_to_file(
     mut writer_rx: mpsc::Receiver<WriterMessage>,
     context: &SyncContext,
 ) -> anyhow::Result<()> {
-    let mut csv_writer = csv::WriterBuilder::new().from_path(&context.file)?;
+    let mut csv_writer = csv::WriterBuilder::new()
+        .delimiter(b';')
+        .from_path(&context.file)?;
 
     // writer header line
     csv_writer.write_record(get_header_line(context))?;
@@ -111,35 +112,7 @@ async fn process_request(
         .list(&context.schema.entity, page, chunk_limit)
         .await?;
     for entity in response.data {
-        let mut row = Vec::with_capacity(context.schema.mappings.len());
-        for mapping in &context.schema.mappings {
-            match mapping {
-                Mapping::ByPath(by_path_mapping) => {
-                    let value = match by_path_mapping.entity_path.as_ref() {
-                        "id" => {
-                            &serde_json::Value::String(entity.id.to_string())
-                        }
-                        path => {
-                            entity.attributes.get(path).context(
-                                format!(
-                                    "could not get field path {} specified in mapping, entity attributes:\n{}",
-                                    path,
-                                    serde_json::to_string_pretty(&entity.attributes).unwrap()
-                                )
-                            )?
-                        }
-                    };
-
-                    let value_str = match value {
-                        Value::String(s) => s.clone(),
-                        other => serde_json::to_string(other)?,
-                    };
-
-                    row.push(value_str);
-                }
-            }
-        }
-
+        let row = serialize_entity(entity, context)?;
         rows.push(row);
     }
 

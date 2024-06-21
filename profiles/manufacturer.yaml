@@ -1,0 +1,6 @@
+entity: product_manufacturer
+mappings:
+  - file_column: "id"
+    entity_path: "id"
+  - file_column: "name"
+    entity_path: "name"
