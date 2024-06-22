@@ -1,9 +1,26 @@
-# POC sw-sync-cli
-created during the [import / export hackathon](https://shopware.atlassian.net/wiki/spaces/PRODUCT/pages/19887489171/Import+Export+hackathon).
+# sw-sync-cli
 
-This cli tool written in rust calls the shopware sync api to import an CSV file as fast as possible.
+> [!WARNING]  
+> This tool is experimental and for now just a prototype.
 
-## Usage instructions
-1. Have the rust toolchain installed
-2. Copy and fill in the `example.credentials.toml` to `.credentials.toml` with integration credentials (admin -> settings -> system -> integrations)
-3. `cargo run --release`
+A CLI tool that communicates with the 
+[Shopware admin API](https://shopware.stoplight.io/docs/admin-api)
+(over an [integration](https://docs.shopware.com/en/shopware-6-en/settings/system/integrationen?category=shopware-6-en/settings/system))
+to export data into (CSV) files or import data from (CSV) files.
+
+## Features
+
+- It's fast, with a focus on performance
+- Every entity and field available in the API can be exported / imported
+- Import / Export profiles are just `.yaml` files
+  - Which can be copied + adapted + shared freely
+- Profiles include a scripting engine for arbitrary data transformations
+- For now only supports CSV files
+
+## Installation
+
+ToDo
+
+## Usage
+
+ToDo
