@@ -1,7 +1,7 @@
 use crate::api::SwClient;
-use crate::config::{Credentials, Schema};
+use crate::config::{Credentials, Mapping, Schema};
 use crate::data::{export, import, prepare_scripting_environment, ScriptingEnvironment};
-use anyhow::Context;
+use anyhow::{anyhow, Context};
 use clap::{ArgAction, Parser, Subcommand};
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -44,7 +44,7 @@ enum Commands {
 
         /// Path to input data file
         #[arg(short, long)]
-        input: PathBuf,
+        file: PathBuf,
 
         /// Maximum amount of entities, can be used for debugging
         #[arg(short, long)]
@@ -62,7 +62,7 @@ enum Commands {
 
         /// Path to output file
         #[arg(short, long)]
-        output: PathBuf,
+        file: PathBuf,
 
         /// Maximum amount of entities, can be used for debugging
         #[arg(short, long)]
@@ -97,21 +97,21 @@ async fn main() -> anyhow::Result<()> {
         }
         Commands::Import {
             schema,
-            input,
+            file,
             limit,
             verbose,
         } => {
-            let context = create_context(schema, input, limit, verbose).await?;
+            let context = create_context(schema, file, limit, verbose).await?;
             import(Arc::new(context)).await?;
             println!("Imported successfully");
         }
         Commands::Export {
             schema,
-            output,
+            file,
             limit,
             verbose,
         } => {
-            let context = create_context(schema, output, limit, verbose).await?;
+            let context = create_context(schema, file, limit, verbose).await?;
             export(Arc::new(context)).await?;
             println!("Exported successfully");
         }
@@ -159,7 +159,15 @@ async fn create_context(
         .await
         .context("No provided schema file not found")?;
     let schema: Schema = serde_yaml::from_str(&serialized_schema)?;
-    // ToDo: schema verification
+    for mapping in &schema.mappings {
+        if let Mapping::ByPath(by_path) = mapping {
+            if by_path.entity_path.contains('.') || by_path.entity_path.contains('/') {
+                return Err(anyhow!("entity_path currently only supports fields of the entity and no associations, but found '{}'", by_path.entity_path));
+            }
+        }
+    }
+
+    // ToDo: further schema verification
 
     // ToDo: create lookup table for languages + currencies?
 

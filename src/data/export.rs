@@ -11,7 +11,7 @@ pub async fn export(context: Arc<SyncContext>) -> anyhow::Result<()> {
     let mut page = 1;
     let mut counter = 0;
     println!(
-        "Reading {} of type {} with chunk limit {}",
+        "Reading {} of entity '{}' with chunk limit {}",
         total, context.schema.entity, chunk_limit
     );
 

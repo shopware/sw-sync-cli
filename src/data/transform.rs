@@ -29,7 +29,7 @@ pub fn deserialize_row(
                 .iter()
                 .position(|h| h == mapping.file_column)
                 .context(format!(
-                    "Can't find column {} in CSV headers",
+                    "Can't find column '{}' in CSV headers",
                     mapping.file_column
                 ))?;
 
@@ -67,7 +67,7 @@ pub fn deserialize_row(
                     .iter()
                     .position(|header| header == path_mapping.file_column)
                     .context(format!(
-                        "Can't find column {} in CSV headers",
+                        "Can't find column '{}' in CSV headers",
                         path_mapping.file_column
                     ))?;
 
@@ -130,7 +130,7 @@ pub fn serialize_entity(
                 let value = match path_mapping.entity_path.as_ref() {
                     "id" => &serde_json::Value::String(entity.id.to_string()),
                     path => entity.attributes.get(path).context(format!(
-                        "could not get field path {} specified in mapping, entity attributes:\n{}",
+                        "could not get field path '{}' specified in mapping, entity attributes:\n{}",
                         path,
                         serde_json::to_string_pretty(&entity.attributes).unwrap()
                     ))?,
@@ -147,7 +147,7 @@ pub fn serialize_entity(
                 let value = script_row
                     .get(script_mapping.key.as_str())
                     .context(format!(
-                        "failed to retrieve script key {} of row",
+                        "failed to retrieve script key '{}' of row",
                         script_mapping.key
                     ))?;
                 let value_str = serde_json::to_string(value)?;

@@ -1,0 +1,32 @@
+# Profile that contains all required fields for a product
+entity: product
+mappings:
+  - file_column: "id"
+    entity_path: "id"
+  - file_column: "product number"
+    entity_path: "productNumber"
+  - file_column: "default name"
+    entity_path: "name"
+  - file_column: "default price net"
+    key: "default_price_net"
+  - file_column: "default price gross"
+    key: "default_price_gross"
+  - file_column: "stock"
+    entity_path: "stock"
+  - file_column: "tax id"
+    entity_path: "taxId"
+serialize_script: |
+  // ToDo: add convenience function to lookup default currencyId
+  let price = entity.price.find(|p| p.currencyId == "b7d2554b0ce847cd82f3ac9bd1c0dfca");
+  row.default_price_net = price.net;
+  row.default_price_gross = price.gross;
+
+deserialize_script: |
+  entity.price = [
+    #{
+      net: row.default_price_net,
+      gross: row.default_price_gross,
+      linked: true,
+      currencyId: "b7d2554b0ce847cd82f3ac9bd1c0dfca",
+    }
+  ];

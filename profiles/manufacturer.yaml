@@ -2,5 +2,9 @@ entity: product_manufacturer
 mappings:
   - file_column: "identifier"
     entity_path: "id"
-  - file_column: "name (default language)"
+  - file_column: "default name"
     entity_path: "name"
+  - file_column: "default description"
+    entity_path: "description"
+  - file_column: "website"
+    entity_path: "link"

@@ -36,7 +36,7 @@ impl SwClient {
         let entity: String = entity.into();
         let start_instant = Instant::now();
         println!(
-            "sync {:?} {} with payload size {}",
+            "sync {:?} '{}' with payload size {}",
             action,
             &entity,
             payload.len()
