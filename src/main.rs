@@ -36,13 +36,17 @@ enum Commands {
         secret: String,
     },
 
-    /// Import data into shopware
-    Import {
+    /// Import data into shopware or export data to a file
+    Sync {
+        /// Mode (import or export)
+        #[arg(value_enum, short, long)]
+        mode: SyncMode,
+
         /// Path to schema.yaml
         #[arg(short, long)]
         schema: PathBuf,
 
-        /// Path to input data file
+        /// Path to data file
         #[arg(short, long)]
         file: PathBuf,
 
@@ -53,25 +57,17 @@ enum Commands {
         /// Verbose output, used for debugging
         #[arg(short, long, action = ArgAction::SetTrue)]
         verbose: bool,
+
+        /// How many requests can be "in-flight" at the same time
+        #[arg(short, long, default_value = "16")]
+        in_flight_limit: usize,
     },
-    /// Export data out of shopware into a file
-    Export {
-        /// Path to schema.yaml
-        #[arg(short, long)]
-        schema: PathBuf,
+}
 
-        /// Path to output file
-        #[arg(short, long)]
-        file: PathBuf,
-
-        /// Maximum amount of entities, can be used for debugging
-        #[arg(short, long)]
-        limit: Option<u64>,
-
-        /// Verbose output, used for debugging
-        #[arg(short, long, action = ArgAction::SetTrue)]
-        verbose: bool,
-    },
+#[derive(Debug, Clone, Copy, clap::ValueEnum)]
+pub enum SyncMode {
+    Import,
+    Export,
 }
 
 #[derive(Debug)]
@@ -95,25 +91,32 @@ async fn main() -> anyhow::Result<()> {
             auth(domain, id, secret).await?;
             println!("Successfully authenticated. You can continue with other commands now.")
         }
-        Commands::Import {
+        Commands::Sync {
+            mode,
             schema,
             file,
             limit,
             verbose,
+            in_flight_limit,
         } => {
-            let context = create_context(schema, file, limit, verbose).await?;
-            import(Arc::new(context)).await?;
-            println!("Imported successfully");
-        }
-        Commands::Export {
-            schema,
-            file,
-            limit,
-            verbose,
-        } => {
-            let context = create_context(schema, file, limit, verbose).await?;
-            export(Arc::new(context)).await?;
-            println!("Exported successfully");
+            let context = create_context(schema, file, limit, verbose, in_flight_limit).await?;
+
+            match mode {
+                SyncMode::Import => {
+                    tokio::task::spawn_blocking(|| async move { import(Arc::new(context)).await })
+                        .await?
+                        .await?;
+
+                    println!("Imported successfully");
+                }
+                SyncMode::Export => {
+                    tokio::task::spawn_blocking(|| async move { export(Arc::new(context)).await })
+                        .await?
+                        .await?;
+
+                    println!("Exported successfully");
+                }
+            }
         }
     }
 
@@ -133,7 +136,7 @@ async fn auth(domain: String, id: String, secret: String) -> anyhow::Result<()> 
     };
 
     // check if credentials work
-    let _ = SwClient::new(credentials.clone()).await?;
+    let _ = SwClient::new(credentials.clone(), 16).await?;
 
     // write them to file
     let serialized = toml::to_string(&credentials)?;
@@ -147,14 +150,8 @@ async fn create_context(
     file: PathBuf,
     limit: Option<u64>,
     verbose: bool,
+    in_flight_limit: usize,
 ) -> anyhow::Result<SyncContext> {
-    let serialized_credentials = tokio::fs::read_to_string("./.credentials.toml")
-        .await
-        .context("No .credentials.toml found. Call command auth first.")?;
-    let credentials: Credentials = toml::from_str(&serialized_credentials)?;
-    let sw_client = SwClient::new(credentials).await?;
-    // ToDo: lookup entities.json definitions
-
     let serialized_schema = tokio::fs::read_to_string(schema)
         .await
         .context("No provided schema file not found")?;
@@ -166,6 +163,13 @@ async fn create_context(
             }
         }
     }
+
+    let serialized_credentials = tokio::fs::read_to_string("./.credentials.toml")
+        .await
+        .context("No .credentials.toml found. Call command auth first.")?;
+    let credentials: Credentials = toml::from_str(&serialized_credentials)?;
+    let sw_client = SwClient::new(credentials, in_flight_limit).await?;
+    // ToDo: lookup entities.json definitions
 
     // ToDo: further schema verification
 

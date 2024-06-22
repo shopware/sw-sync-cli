@@ -2,28 +2,28 @@ use crate::api::{SwApiError, SyncAction};
 use crate::data::transform::deserialize_row;
 use crate::SyncContext;
 use itertools::Itertools;
-use std::cmp;
 use std::sync::Arc;
 
+/// Might block, so should be used with `task::spawn_blocking`
 pub async fn import(context: Arc<SyncContext>) -> anyhow::Result<()> {
     let mut csv_reader = csv::ReaderBuilder::new()
         .delimiter(b';')
         .from_path(&context.file)?;
     let headers = csv_reader.headers()?.clone();
-    println!("CSV headers: {:?}", headers);
 
-    let iter = csv_reader.into_records().map(|r| {
-        let result = r.expect("failed reading CSV row");
+    let iter = csv_reader
+        .into_records()
+        .map(|r| {
+            let result = r.expect("failed reading CSV row");
 
-        deserialize_row(&headers, result, &context).expect("deserialize failed")
-        // ToDo improve error handling
-    });
+            deserialize_row(&headers, result, &context).expect("deserialize failed")
+            // ToDo improve error handling
+        })
+        .enumerate()
+        .take(context.limit.unwrap_or(u64::MAX) as usize);
 
     let mut join_handles = vec![];
-    for sync_values in &iter
-        .enumerate()
-        .chunks(cmp::min(500, context.limit.unwrap_or(500) as usize))
-    {
+    for sync_values in &iter.chunks(500) {
         let (mut row_indices, mut chunk): (
             Vec<usize>,
             Vec<serde_json::Map<String, serde_json::Value>>,

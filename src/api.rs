@@ -6,22 +6,26 @@ use serde_json::json;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 use thiserror::Error;
+use tokio::sync::Semaphore;
 
 #[derive(Debug, Clone)]
 pub struct SwClient {
     client: Client,
+    /// Limits the number of "in-flight" requests
+    in_flight_semaphore: Arc<Semaphore>,
     credentials: Arc<Credentials>,
     access_token: Arc<Mutex<String>>,
 }
 
 impl SwClient {
-    pub async fn new(credentials: Credentials) -> anyhow::Result<Self> {
+    pub async fn new(credentials: Credentials, in_flight_limit: usize) -> anyhow::Result<Self> {
         let client = Client::builder().timeout(Duration::from_secs(10)).build()?;
         let credentials = Arc::new(credentials);
         let auth_response = Self::authenticate(&client, credentials.as_ref()).await?;
 
         Ok(Self {
             client,
+            in_flight_semaphore: Arc::new(Semaphore::new(in_flight_limit)),
             credentials,
             access_token: Arc::new(Mutex::new(auth_response.access_token)),
         })
@@ -51,16 +55,18 @@ impl SwClient {
             },
         };
 
-        let response = self
-            .client
-            .post(format!("{}/api/_action/sync", self.credentials.base_url))
-            .bearer_auth(access_token)
-            .header("single-operation", 1)
-            .header("indexing-behavior", "disable-indexing")
-            .header("sw-skip-trigger-flow", 1)
-            .json(&body)
-            .send()
-            .await?;
+        let response = {
+            let _lock = self.in_flight_semaphore.acquire();
+            self.client
+                .post(format!("{}/api/_action/sync", self.credentials.base_url))
+                .bearer_auth(access_token)
+                .header("single-operation", 1)
+                .header("indexing-behavior", "disable-indexing")
+                .header("sw-skip-trigger-flow", 1)
+                .json(&body)
+                .send()
+                .await?
+        };
 
         if !response.status().is_success() {
             let status = response.status();
@@ -81,15 +87,17 @@ impl SwClient {
     ) -> Result<serde_json::Map<String, serde_json::Value>, SwApiError> {
         // ToDo: implement retry on auth fail
         let access_token = self.access_token.lock().unwrap().clone();
-        let response = self
-            .client
-            .get(format!(
-                "{}/api/_info/entity-schema.json",
-                self.credentials.base_url
-            ))
-            .bearer_auth(access_token)
-            .send()
-            .await?;
+        let response = {
+            let _lock = self.in_flight_semaphore.acquire();
+            self.client
+                .get(format!(
+                    "{}/api/_info/entity-schema.json",
+                    self.credentials.base_url
+                ))
+                .bearer_auth(access_token)
+                .send()
+                .await?
+        };
 
         if !response.status().is_success() {
             let status = response.status();
@@ -108,25 +116,27 @@ impl SwClient {
         // ToDo: implement retry on auth fail
         let access_token = self.access_token.lock().unwrap().clone();
 
-        let response = self
-            .client
-            .post(format!(
-                "{}/api/search/{}",
-                self.credentials.base_url, entity
-            ))
-            .bearer_auth(access_token)
-            .json(&json!({
-                "limit": 1,
-                "aggregations": [
-                    {
-                      "name": "count",
-                      "type": "count",
-                      "field": "id"
-                    }
-                ]
-            }))
-            .send()
-            .await?;
+        let response = {
+            let _lock = self.in_flight_semaphore.acquire();
+            self.client
+                .post(format!(
+                    "{}/api/search/{}",
+                    self.credentials.base_url, entity
+                ))
+                .bearer_auth(access_token)
+                .json(&json!({
+                    "limit": 1,
+                    "aggregations": [
+                        {
+                          "name": "count",
+                          "type": "count",
+                          "field": "id"
+                        }
+                    ]
+                }))
+                .send()
+                .await?
+        };
 
         if !response.status().is_success() {
             let status = response.status();
@@ -152,24 +162,27 @@ impl SwClient {
         page: u64,
         limit: u64,
     ) -> Result<SwListResponse, SwApiError> {
+        let start_instant = Instant::now();
         // entity needs to be provided as kebab-case instead of snake_case
         let entity = entity.replace('_', "-");
 
         // ToDo: implement retry on auth fail
         let access_token = self.access_token.lock().unwrap().clone();
-        let response = self
-            .client
-            .post(format!(
-                "{}/api/search/{}",
-                self.credentials.base_url, entity
-            ))
-            .bearer_auth(access_token)
-            .json(&json!({
-                "page": page,
-                "limit": limit
-            }))
-            .send()
-            .await?;
+        let response = {
+            let _lock = self.in_flight_semaphore.acquire();
+            self.client
+                .post(format!(
+                    "{}/api/search/{}",
+                    self.credentials.base_url, entity
+                ))
+                .bearer_auth(access_token)
+                .json(&json!({
+                    "page": page,
+                    "limit": limit
+                }))
+                .send()
+                .await?
+        };
 
         if !response.status().is_success() {
             let status = response.status();
@@ -178,6 +191,12 @@ impl SwClient {
         }
 
         let value: SwListResponse = Self::deserialize(response).await?;
+
+        println!(
+            "search request finished after {} ms",
+            start_instant.elapsed().as_millis()
+        );
+
         Ok(value)
     }
 
