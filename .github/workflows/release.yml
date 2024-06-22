@@ -1,0 +1,146 @@
+# Source of this pipeline code: https://github.com/paskausks/rust-bin-github-workflows
+# MIT License - Copyright (c) 2019 Rihards Paskausks
+# Modified by
+# Copyright (c) 2024 Malte Janz
+
+on:
+  push:
+    # Sequence of patterns matched against refs/tags
+    tags:
+      - 'v*' # Push events to matching v*, i.e. v1.0, v20.15.10
+
+name: Create and deploy release
+
+env:
+  # Could, potentially automatically parse
+  # the bin name, but let's do it automatically for now.
+  RELEASE_BIN: sw-sync-cli
+
+  # Space separated paths to include in the archive.
+  # Start relative paths with a dot if you don't want
+  # paths to be preserved. Use "/" as a delimiter.
+  RELEASE_ADDS: README.md LICENSE
+
+  # Name of the docker image
+  CONTAINER_IMG_NAME: "maltejanz/sw-sync-cli"
+
+
+jobs:
+  tag_version:
+    name: Get the version from tag
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.get_version.outputs.VERSION }}
+
+    steps:
+      - name: Save version from tag
+        id: get_version
+        shell: bash
+        run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+
+
+  build:
+    name: Build artifacts
+    needs: [tag_version]
+
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - build: x86_64-unknown-linux-gnu
+            os: ubuntu-latest
+            type: application/gzip
+            output_ending: .tar.gz
+          - build: x86_64-apple-darwin
+            os: macos-latest
+            type: application/gzip
+            output_ending: .tar.gz
+          - build: aarch64-apple-darwin
+            os: macos-14 # m1 runner
+            type: application/gzip
+            output_ending: .tar.gz
+          - build: x86_64-pc-windows-msvc
+            os: windows-latest
+            type: application/zip
+            output_ending: .zip
+
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Install latest stable Rust version
+      uses: dtolnay/rust-toolchain@stable
+
+    - uses: Swatinem/rust-cache@v2
+
+    - name: Final cargo test
+      run: cargo test --verbose --all-features
+
+    - name: Run cargo build
+      run: cargo build --release --verbose
+
+    - name: Create artifact directory
+      run: mkdir artifacts
+
+    - name: Create archive for Windows
+      run: 7z a -tzip ./artifacts/${{ env.RELEASE_BIN }}-${{ needs.tag_version.outputs.version }}-${{ matrix.build }}${{ matrix.output_ending }} ./target/release/${{ env.RELEASE_BIN }}.exe ${{ env.RELEASE_ADDS }}
+      if: matrix.os == 'windows-latest'
+
+    - name: Create archive for Linux
+      run: 7z a -ttar -so -an ./target/release/${{ env.RELEASE_BIN }} ${{ env.RELEASE_ADDS }} | 7z a -tgzip -si ./artifacts/${{ env.RELEASE_BIN }}-${{ needs.tag_version.outputs.version }}-${{ matrix.build }}${{ matrix.output_ending }}
+      if: matrix.os == 'ubuntu-latest'
+
+    - name: Install p7zip on MacOS
+      # 7Zip not available on MacOS, install p7zip via homebrew.
+      run: brew install p7zip
+      if: matrix.os == 'macos-latest' || matrix.os == 'macos-14'
+    
+    - name: Create archive for MacOS
+      run: 7z a -ttar -so -an ./target/release/${{ env.RELEASE_BIN }} ${{ env.RELEASE_ADDS }} | 7z a -tgzip -si ./artifacts/${{ env.RELEASE_BIN }}-${{ needs.tag_version.outputs.version }}-${{ matrix.build }}${{ matrix.output_ending }}
+      if: matrix.os == 'macos-latest' || matrix.os == 'macos-14'
+
+    - name: Upload artifact
+      uses: actions/upload-artifact@v3
+      with:
+        name: executables
+        path: artifacts/*
+        if-no-files-found: error
+
+
+  github_draft_release:
+    name: Create GitHub draft release
+    needs: [tag_version, build]
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/download-artifact@v3
+        with:
+          name: executables
+          path: artifacts
+
+      - name: Create draft release
+        id: create_release
+        uses: softprops/action-gh-release@v1
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          tag_name: ${{ github.ref }}
+          name: Release ${{ needs.tag_version.outputs.version }}
+          draft: true
+          prerelease: false
+          files: |
+            artifacts/*
+
+
+  publish_crate:
+    name: Publish to crates.io
+    needs: [tag_version, build]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install latest stable Rust version
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Publish sw-sync-cli
+        env:
+          CRATES_TOKEN: ${{ secrets.CRATES_TOKEN }}
+        run: cargo publish --token ${CRATES_TOKEN}
