@@ -19,8 +19,85 @@ to export data into (CSV) files or import data from (CSV) files.
 
 ## Installation
 
-ToDo
+### With Cargo ([Rust toolchain](https://www.rust-lang.org/learn/get-started))
+```bash
+cargo install sw-sync-cli
+```
+Same command can be used for updates.
+
+### Manual
+head to GitHub releases and download the right binary for your operating system.
+Then either execute the binary directly or put it in your `PATH`.
 
 ## Usage
 
-ToDo
+1. Setup an [integration](https://docs.shopware.com/en/shopware-6-en/settings/system/integrationen?category=shopware-6-en/settings/system) inside shopware.
+2. Call `sw-sync-cli auth` with the required arguments (credentials)
+
+> [!Note]  
+> This will create a `.credentials.toml` file in your current working directory.
+> This file contains your credentials in plain text, you might want to remove it again after you are done syncing.
+
+3. Call `sw-sync-cli sync` in either `-m import` or `-m export` mode, with a profile (`schema.yaml`) and data file `data.csv`
+
+### Profiles
+
+To get started take a look at [Profiles in this repository](https://github.com/MalteJanz/sw-sync-cli/tree/main/profiles).
+The structure of a profile `.yaml` is as follows:
+
+```yaml
+entity: product
+# mappings can either be
+# - by entity_path
+# - by key
+# the latter needs to be resolved by custom scripts
+mappings:
+  - file_column: "id"
+    entity_path: "id"
+  - file_column: "name (default language)"
+    entity_path: "name"
+  - file_column: "product number"
+    entity_path: "productNumber"
+  - file_column: "stock"
+    entity_path: "stock"
+  - file_column: "tax id"
+    entity_path: "taxId"
+  - file_column: "gross price EUR"
+    key: "gross_price_eur"
+  - file_column: "net price EUR"
+    key: "net_price_eur"
+# optional serialization script, which is called once per entity
+serialize_script: |
+  // See https://rhai.rs/book/ for scripting language documentation
+  // you receive an entity object, which consists of the whole entity API response for that single entity
+  // you also receive an empty row object where the specified keys above are missing (you need to set them)
+  // the other simple mappings are executed (added to the row object) after this script
+  
+  // debugging utils
+  // debug(entity); // contains the full entity object from the API (can be huge!)
+  // print(row); // will be empty
+  
+  // ToDo: add convenience function to lookup currencyId by iso code
+  let price = entity.price.find(|p| p.currencyId == "b7d2554b0ce847cd82f3ac9bd1c0dfca");
+  row.gross_price_eur = price.gross;
+  row.net_price_eur = price.net;
+
+# optional deserialization script, which is called once per entity
+deserialize_script: |
+  // See https://rhai.rs/book/ for scripting language documentation
+  // you receive 'row' as an object that has all the keys defined above with the corresponding value
+  // you also receive an empty entity object, where you need to resolve your keys
+  // the other simple mappings are executed (added to the entity object) after this script
+  
+  // print(entity); // will be empty
+  // debug(row); // will contain only the specified keys + their values
+  
+  entity.price = [];
+  entity.price.push(#{
+    gross: row.gross_price_eur,
+    net: row.net_price_eur,
+    linked: true,
+    currencyId: "b7d2554b0ce847cd82f3ac9bd1c0dfca",
+  });
+
+```

@@ -42,7 +42,7 @@ enum Commands {
         #[arg(value_enum, short, long)]
         mode: SyncMode,
 
-        /// Path to schema.yaml
+        /// Path to profile schema.yaml
         #[arg(short, long)]
         schema: PathBuf,
 
