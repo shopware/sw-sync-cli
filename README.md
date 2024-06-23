@@ -26,7 +26,7 @@ cargo install sw-sync-cli
 Same command can be used for updates.
 
 ### Manual
-head to GitHub releases and download the right binary for your operating system.
+head to [GitHub releases](https://github.com/MalteJanz/sw-sync-cli/releases) and download the right binary for your operating system.
 Then either execute the binary directly or put it in your `PATH`.
 
 ## Usage
