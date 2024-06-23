@@ -47,6 +47,19 @@ The structure of a profile `.yaml` is as follows:
 
 ```yaml
 entity: product
+
+# optional filtering, only applied on export
+filter:
+  # export main products (parentId = NULL) only
+  - type: "equals"
+    field: "parentId"
+    value: null
+
+# optional sorting, only applied on export
+sort:
+  - field: "name"
+    order: "ASC"
+
 # mappings can either be
 # - by entity_path
 # - by key
@@ -66,6 +79,7 @@ mappings:
     key: "gross_price_eur"
   - file_column: "net price EUR"
     key: "net_price_eur"
+
 # optional serialization script, which is called once per entity
 serialize_script: |
   // See https://rhai.rs/book/ for scripting language documentation

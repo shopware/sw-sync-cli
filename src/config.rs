@@ -1,3 +1,4 @@
+use crate::api::{CriteriaFilter, CriteriaSorting};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -10,6 +11,10 @@ pub struct Credentials {
 #[derive(Debug, Deserialize)]
 pub struct Schema {
     pub entity: String,
+    #[serde(default = "Vec::new")]
+    pub filter: Vec<CriteriaFilter>,
+    #[serde(default = "Vec::new")]
+    pub sort: Vec<CriteriaSorting>,
     pub mappings: Vec<Mapping>,
     #[serde(default = "String::new")]
     pub serialize_script: String,

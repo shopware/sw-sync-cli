@@ -1,7 +1,7 @@
 use crate::api::SwClient;
 use crate::config::{Credentials, Mapping, Schema};
 use crate::data::{export, import, prepare_scripting_environment, ScriptingEnvironment};
-use anyhow::{anyhow, Context};
+use anyhow::Context;
 use clap::{ArgAction, Parser, Subcommand};
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -79,6 +79,7 @@ pub struct SyncContext {
     pub limit: Option<u64>,
     pub verbose: bool,
     pub scripting_environment: ScriptingEnvironment,
+    pub associations: Vec<String>,
 }
 
 #[tokio::main]
@@ -156,12 +157,16 @@ async fn create_context(
         .await
         .context("No provided schema file not found")?;
     let schema: Schema = serde_yaml::from_str(&serialized_schema)?;
+    let mut associations = vec![];
     for mapping in &schema.mappings {
         if let Mapping::ByPath(by_path) = mapping {
-            if by_path.entity_path.contains('.') || by_path.entity_path.contains('/') {
-                return Err(anyhow!("entity_path currently only supports fields of the entity and no associations, but found '{}'", by_path.entity_path));
+            if let Some((association, _field)) = by_path.entity_path.rsplit_once('.') {
+                associations.push(association.to_owned());
             }
         }
+    }
+    if !associations.is_empty() {
+        println!("Detected associations: {:#?}", associations);
     }
 
     let serialized_credentials = tokio::fs::read_to_string("./.credentials.toml")
@@ -185,5 +190,6 @@ async fn create_context(
         file,
         limit,
         verbose,
+        associations,
     })
 }

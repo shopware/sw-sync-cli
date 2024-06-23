@@ -1,3 +1,4 @@
+use crate::api::Criteria;
 use crate::data::transform::serialize_entity;
 use crate::SyncContext;
 use std::cmp;
@@ -6,12 +7,15 @@ use tokio::task::JoinHandle;
 
 /// Might block, so should be used with `task::spawn_blocking`
 pub async fn export(context: Arc<SyncContext>) -> anyhow::Result<()> {
-    let mut total = context.sw_client.get_total(&context.schema.entity).await?;
+    let mut total = context
+        .sw_client
+        .get_total(&context.schema.entity, &context.schema.filter)
+        .await?;
     if let Some(limit) = context.limit {
         total = cmp::min(limit, total);
     }
 
-    let chunk_limit = cmp::min(500, total); // 500 is the maximum allowed per API request
+    let chunk_limit = cmp::min(Criteria::MAX_LIMIT, total);
     let mut page = 1;
     let mut counter = 0;
     println!(
@@ -76,10 +80,20 @@ async fn process_request(
         page, context.schema.entity, chunk_limit
     );
     let mut rows: Vec<Vec<String>> = Vec::with_capacity(chunk_limit as usize);
+    let mut criteria = Criteria {
+        page,
+        limit: chunk_limit,
+        sort: context.schema.sort.clone(),
+        filter: context.schema.filter.clone(),
+        ..Default::default()
+    };
+    for association in &context.associations {
+        criteria.add_association(association);
+    }
 
     let response = context
         .sw_client
-        .list(&context.schema.entity, page, chunk_limit)
+        .list(&context.schema.entity, &criteria)
         .await?;
     for entity in response.data {
         let row = serialize_entity(entity, context)?;

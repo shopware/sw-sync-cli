@@ -1,5 +1,16 @@
 # Profile that contains all required fields for a product
 entity: product
+
+filter:
+  # export main products (parentId = NULL) only
+  - type: "equals"
+    field: "parentId"
+    value: null
+
+sort:
+  - field: "name"
+    order: "ASC"
+
 mappings:
   - file_column: "id"
     entity_path: "id"
@@ -15,6 +26,7 @@ mappings:
     entity_path: "stock"
   - file_column: "tax id"
     entity_path: "taxId"
+
 serialize_script: |
   // ToDo: add convenience function to lookup default currencyId
   let price = entity.price.find(|p| p.currencyId == "b7d2554b0ce847cd82f3ac9bd1c0dfca");
