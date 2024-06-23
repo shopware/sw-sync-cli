@@ -1,6 +1,7 @@
 use crate::config::Credentials;
 use anyhow::anyhow;
-use reqwest::{Client, Response, StatusCode};
+use reqwest::header::{HeaderMap, HeaderValue};
+use reqwest::{header, Client, Response, StatusCode};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::collections::BTreeMap;
@@ -20,7 +21,14 @@ pub struct SwClient {
 
 impl SwClient {
     pub async fn new(credentials: Credentials, in_flight_limit: usize) -> anyhow::Result<Self> {
-        let client = Client::builder().timeout(Duration::from_secs(10)).build()?;
+        let mut default_headers = HeaderMap::default();
+        // This header is needed, otherwise the response would be "application/vnd.api+json" (by default)
+        // and that doesn't have the association data as part of the entity object
+        default_headers.insert(header::ACCEPT, HeaderValue::from_static("application/json"));
+        let client = Client::builder()
+            .timeout(Duration::from_secs(10))
+            .default_headers(default_headers)
+            .build()?;
         let credentials = Arc::new(credentials);
         let auth_response = Self::authenticate(&client, credentials.as_ref()).await?;
 
@@ -311,15 +319,10 @@ pub struct SwErrorSource {
 
 #[derive(Debug, Deserialize)]
 pub struct SwListResponse {
-    pub data: Vec<SwListEntity>,
+    pub data: Vec<Entity>,
 }
 
-#[derive(Debug, Deserialize)]
-pub struct SwListEntity {
-    pub id: String,
-    pub r#type: String,
-    pub attributes: serde_json::Map<String, serde_json::Value>,
-}
+pub type Entity = serde_json::Map<String, serde_json::Value>;
 
 #[derive(Debug, Serialize)]
 pub struct Criteria {

@@ -1,5 +1,6 @@
 use crate::api::{CriteriaFilter, CriteriaSorting};
 use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Credentials {
@@ -15,6 +16,8 @@ pub struct Schema {
     pub filter: Vec<CriteriaFilter>,
     #[serde(default = "Vec::new")]
     pub sort: Vec<CriteriaSorting>,
+    #[serde(default = "HashSet::new")]
+    pub associations: HashSet<String>,
     pub mappings: Vec<Mapping>,
     #[serde(default = "String::new")]
     pub serialize_script: String,

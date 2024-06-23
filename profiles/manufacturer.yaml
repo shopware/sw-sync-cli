@@ -9,3 +9,5 @@ mappings:
     entity_path: "description"
   - file_column: "website"
     entity_path: "link"
+  - file_column: "logo"
+    entity_path: "media?.url"

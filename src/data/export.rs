@@ -7,6 +7,16 @@ use tokio::task::JoinHandle;
 
 /// Might block, so should be used with `task::spawn_blocking`
 pub async fn export(context: Arc<SyncContext>) -> anyhow::Result<()> {
+    if !context.associations.is_empty() {
+        println!("Using associations: {:#?}", context.associations);
+    }
+    if !context.schema.filter.is_empty() {
+        println!("Using filter: {:#?}", context.schema.filter);
+    }
+    if !context.schema.sort.is_empty() {
+        println!("Using sort: {:#?}", context.schema.sort);
+    }
+
     let mut total = context
         .sw_client
         .get_total(&context.schema.entity, &context.schema.filter)

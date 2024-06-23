@@ -1,4 +1,4 @@
-use crate::api::SwListEntity;
+use crate::api::Entity;
 use crate::config::Mapping;
 use crate::SyncContext;
 use anyhow::Context;
@@ -88,6 +88,7 @@ pub fn deserialize_row(
                     serde_json::Value::String(raw_value.to_owned())
                 };
 
+                // ToDo: insert path must be considered and create child json objects (maps)
                 entity.insert(path_mapping.entity_path.clone(), json_value);
             }
             Mapping::ByScript(_script_mapping) => {
@@ -100,15 +101,12 @@ pub fn deserialize_row(
 }
 
 /// Serialize a single entity (as json object) into a single row (string columns)
-pub fn serialize_entity(
-    entity: SwListEntity,
-    context: &SyncContext,
-) -> anyhow::Result<Vec<String>> {
+pub fn serialize_entity(entity: Entity, context: &SyncContext) -> anyhow::Result<Vec<String>> {
     let script_row = if let Some(serialize) = &context.scripting_environment.serialize {
         let engine = &context.scripting_environment.engine;
 
         let mut scope = Scope::new();
-        let script_entity = rhai::serde::to_dynamic(&entity.attributes)?;
+        let script_entity = rhai::serde::to_dynamic(&entity)?;
         scope.push_dynamic("entity", script_entity);
         let row_dynamic = rhai::Map::new();
         scope.push("row", row_dynamic);
@@ -127,14 +125,12 @@ pub fn serialize_entity(
     for mapping in &context.schema.mappings {
         match mapping {
             Mapping::ByPath(path_mapping) => {
-                let value = match path_mapping.entity_path.as_ref() {
-                    "id" => &serde_json::Value::String(entity.id.to_string()),
-                    path => entity.attributes.get(path).context(format!(
-                        "could not get field path '{}' specified in mapping, entity attributes:\n{}",
-                        path,
-                        serde_json::to_string_pretty(&entity.attributes).unwrap()
-                    ))?,
-                };
+                let value = entity.get_by_path(&path_mapping.entity_path)
+                    .context(format!(
+                        "could not get field path '{}' specified in mapping (you might try the optional chaining operator '?.' to fallback to null), entity attributes:\n{}",
+                        path_mapping.entity_path,
+                        serde_json::to_string_pretty(&entity).unwrap())
+                    )?;
 
                 let value_str = match value {
                     serde_json::Value::String(s) => s.clone(),
@@ -230,4 +226,123 @@ fn get_base_engine() -> Engine {
      */
 
     engine
+}
+
+trait EntityPath {
+    /// Search for a value inside a json object tree by a given path.
+    /// Example path `object.child.attribute`
+    /// Path with null return, if not existing: `object?.child?.attribute`
+    fn get_by_path(&self, path: &str) -> Option<&serde_json::Value>;
+
+    /// Insert a value into a given path
+    fn insert_by_path(&mut self, path: &str, value: serde_json::Value);
+}
+
+impl EntityPath for Entity {
+    // based on the pointer implementation in serde_json::Value
+    fn get_by_path(&self, path: &str) -> Option<&serde_json::Value> {
+        if path.is_empty() {
+            return None;
+        }
+
+        let tokens = path.split('.');
+        let mut optional_chain = tokens.clone().map(|token| token.ends_with('?'));
+        let mut tokens = tokens.map(|t| t.trim_end_matches('?'));
+
+        // initial access happens on map
+        let first_token = tokens.next()?;
+        let first_optional = optional_chain.next()?;
+        let mut value = match self.get(first_token) {
+            Some(v) => v,
+            None => {
+                if first_optional {
+                    return Some(&serde_json::Value::Null);
+                } else {
+                    return None;
+                }
+            }
+        };
+
+        // the question mark refers to the current token and allows it to be undefined
+        // https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Operators/Optional_chaining
+        for (token, is_optional) in tokens.zip(optional_chain) {
+            value = match value {
+                serde_json::Value::Object(map) => match map.get(token) {
+                    Some(v) => v,
+                    None => {
+                        return if is_optional {
+                            Some(&serde_json::Value::Null)
+                        } else {
+                            None
+                        }
+                    }
+                },
+                serde_json::Value::Null => {
+                    return Some(&serde_json::Value::Null);
+                }
+                _ => {
+                    return None;
+                }
+            }
+        }
+
+        Some(value)
+    }
+
+    fn insert_by_path(&mut self, path: &str, value: serde_json::Value) {
+        if path.is_empty() {
+            panic!("empty entity_path encountered");
+        }
+
+        let mut tokens = path.split('.').map(|t| t.trim_end_matches('?'));
+
+        let first_token = tokens.next().expect("has a value because non empty");
+
+        todo!("implement me and write tests")
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::data::transform::EntityPath;
+    use serde_json::{json, Number, Value};
+
+    #[test]
+    fn test_get_by_path() {
+        let child = json!({
+            "attribute": 42,
+            "hello": null
+        });
+        let entity = json!({
+            "child": child,
+            "fizz": "buzz",
+            "hello": null,
+        });
+
+        let entity = match entity {
+            Value::Object(map) => map,
+            _ => unreachable!(),
+        };
+
+        assert_eq!(
+            entity.get_by_path("fizz"),
+            Some(&Value::String("buzz".into()))
+        );
+        assert_eq!(entity.get_by_path("child"), Some(&child));
+        assert_eq!(entity.get_by_path("bar"), None);
+        assert_eq!(
+            entity.get_by_path("child.attribute"),
+            Some(&Value::Number(Number::from(42)))
+        );
+        assert_eq!(entity.get_by_path("child.bar"), None);
+        assert_eq!(entity.get_by_path("child.fizz.bar"), None);
+
+        // optional chaining
+        assert_eq!(entity.get_by_path("child?.bar"), None);
+        assert_eq!(entity.get_by_path("child?.bar?.fizz"), Some(&Value::Null));
+        assert_eq!(entity.get_by_path("child?.attribute?.fizz"), None); // invalid access (attribute is not a map)
+        assert_eq!(entity.get_by_path("hello?.bar"), Some(&Value::Null));
+        assert_eq!(entity.get_by_path("child.hello"), Some(&Value::Null));
+        assert_eq!(entity.get_by_path("child.hello?.bar"), Some(&Value::Null));
+    }
 }

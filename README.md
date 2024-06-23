@@ -60,6 +60,12 @@ sort:
   - field: "name"
     order: "ASC"
 
+# optional additional associations (that you need in your deserialization script)
+# note: entity_path associations are already added by default
+# only applied on export
+associations:
+  - "cover"
+
 # mappings can either be
 # - by entity_path
 # - by key
@@ -75,6 +81,16 @@ mappings:
     entity_path: "stock"
   - file_column: "tax id"
     entity_path: "taxId"
+  - file_column: "tax rate"
+    # entity path can resolve "To-One-Associations" of any depth
+    entity_path: "tax.taxRate"
+  - file_column: "manufacturer name"
+    # They can also use the optional chaining '?.' operator to fall back to null
+    # if the association is null
+    entity_path: "manufacturer?.name"
+  - file_column: "manufacturer id"
+    # for importing, you also need the association id in the association object
+    entity_path: "manufacturer?.id"
   - file_column: "gross price EUR"
     key: "gross_price_eur"
   - file_column: "net price EUR"
