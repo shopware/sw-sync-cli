@@ -440,6 +440,6 @@ mod tests {
         });
 
         let json = serde_json::to_string(&criteria).unwrap();
-        assert_eq!(json, "{\"limit\":10,\"page\":2,\"filter\":[{\"type\":\"Equals\",\"field\":\"parentId\",\"value\":null}]}");
+        assert_eq!(json, "{\"limit\":10,\"page\":2,\"filter\":[{\"type\":\"equals\",\"field\":\"parentId\",\"value\":null}]}");
     }
 }
