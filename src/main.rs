@@ -60,7 +60,7 @@ enum Commands {
         verbose: bool,
 
         /// How many requests can be "in-flight" at the same time
-        #[arg(short, long, default_value = "16")]
+        #[arg(short, long, default_value = "8")]
         in_flight_limit: usize,
     },
 }
@@ -138,7 +138,7 @@ async fn auth(domain: String, id: String, secret: String) -> anyhow::Result<()> 
     };
 
     // check if credentials work
-    let _ = SwClient::new(credentials.clone(), 16).await?;
+    let _ = SwClient::new(credentials.clone(), 8).await?;
 
     // write them to file
     let serialized = toml::to_string(&credentials)?;

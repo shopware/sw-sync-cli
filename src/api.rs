@@ -26,12 +26,13 @@ impl SwClient {
         // and that doesn't have the association data as part of the entity object
         default_headers.insert(header::ACCEPT, HeaderValue::from_static("application/json"));
         let client = Client::builder()
-            .timeout(Duration::from_secs(10))
+            .timeout(Duration::from_secs(15))
             .default_headers(default_headers)
             .build()?;
         let credentials = Arc::new(credentials);
         let auth_response = Self::authenticate(&client, credentials.as_ref()).await?;
 
+        println!("Shopware API client with in_flight_limit={} created and authenticated", in_flight_limit);
         Ok(Self {
             client,
             in_flight_semaphore: Arc::new(Semaphore::new(in_flight_limit)),
@@ -47,7 +48,6 @@ impl SwClient {
         payload: &[T],
     ) -> Result<(), SwApiError> {
         let entity: String = entity.into();
-        let start_instant = Instant::now();
         println!(
             "sync {:?} '{}' with payload size {}",
             action,
@@ -65,8 +65,9 @@ impl SwClient {
         };
 
         let response = {
-            let _lock = self.in_flight_semaphore.acquire();
-            self.client
+            let _lock = self.in_flight_semaphore.acquire().await.unwrap();
+            let start_instant = Instant::now();
+            let res = self.client
                 .post(format!("{}/api/_action/sync", self.credentials.base_url))
                 .bearer_auth(access_token)
                 .header("single-operation", 1)
@@ -74,7 +75,12 @@ impl SwClient {
                 .header("sw-skip-trigger-flow", 1)
                 .json(&body)
                 .send()
-                .await?
+                .await?;
+            println!(
+                "sync request finished after {} ms",
+                start_instant.elapsed().as_millis()
+            );
+            res
         };
 
         if !response.status().is_success() {
@@ -82,11 +88,6 @@ impl SwClient {
             let body: SwErrorBody = Self::deserialize(response).await?;
             return Err(SwApiError::Server(status, body));
         }
-
-        println!(
-            "sync finished after {} ms",
-            start_instant.elapsed().as_millis()
-        );
 
         Ok(())
     }
@@ -97,7 +98,7 @@ impl SwClient {
         // ToDo: implement retry on auth fail
         let access_token = self.access_token.lock().unwrap().clone();
         let response = {
-            let _lock = self.in_flight_semaphore.acquire();
+            let _lock = self.in_flight_semaphore.acquire().await.unwrap();
             self.client
                 .get(format!(
                     "{}/api/_info/entity-schema.json",
@@ -130,7 +131,7 @@ impl SwClient {
         let access_token = self.access_token.lock().unwrap().clone();
 
         let response = {
-            let _lock = self.in_flight_semaphore.acquire();
+            let _lock = self.in_flight_semaphore.acquire().await.unwrap();
             self.client
                 .post(format!(
                     "{}/api/search/{}",
@@ -175,15 +176,15 @@ impl SwClient {
         entity: &str,
         criteria: &Criteria,
     ) -> Result<SwListResponse, SwApiError> {
-        let start_instant = Instant::now();
         // entity needs to be provided as kebab-case instead of snake_case
         let entity = entity.replace('_', "-");
 
         // ToDo: implement retry on auth fail
         let access_token = self.access_token.lock().unwrap().clone();
         let response = {
-            let _lock = self.in_flight_semaphore.acquire();
-            self.client
+            let _lock = self.in_flight_semaphore.acquire().await.unwrap();
+            let start_instant = Instant::now();
+            let res = self.client
                 .post(format!(
                     "{}/api/search/{}",
                     self.credentials.base_url, entity
@@ -191,7 +192,12 @@ impl SwClient {
                 .bearer_auth(access_token)
                 .json(criteria)
                 .send()
-                .await?
+                .await?;
+            println!(
+                "search request finished after {} ms",
+                start_instant.elapsed().as_millis()
+            );
+            res
         };
 
         if !response.status().is_success() {
@@ -201,11 +207,6 @@ impl SwClient {
         }
 
         let value: SwListResponse = Self::deserialize(response).await?;
-
-        println!(
-            "search request finished after {} ms",
-            start_instant.elapsed().as_millis()
-        );
 
         Ok(value)
     }
