@@ -32,7 +32,10 @@ impl SwClient {
         let credentials = Arc::new(credentials);
         let auth_response = Self::authenticate(&client, credentials.as_ref()).await?;
 
-        println!("Shopware API client with in_flight_limit={} created and authenticated", in_flight_limit);
+        println!(
+            "Shopware API client with in_flight_limit={} created and authenticated",
+            in_flight_limit
+        );
         Ok(Self {
             client,
             in_flight_semaphore: Arc::new(Semaphore::new(in_flight_limit)),
@@ -67,7 +70,8 @@ impl SwClient {
         let response = {
             let _lock = self.in_flight_semaphore.acquire().await.unwrap();
             let start_instant = Instant::now();
-            let res = self.client
+            let res = self
+                .client
                 .post(format!("{}/api/_action/sync", self.credentials.base_url))
                 .bearer_auth(access_token)
                 .header("single-operation", 1)
@@ -184,7 +188,8 @@ impl SwClient {
         let response = {
             let _lock = self.in_flight_semaphore.acquire().await.unwrap();
             let start_instant = Instant::now();
-            let res = self.client
+            let res = self
+                .client
                 .post(format!(
                     "{}/api/search/{}",
                     self.credentials.base_url, entity

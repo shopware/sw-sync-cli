@@ -309,7 +309,9 @@ impl EntityPath for Entity {
             return;
         }
 
-        let mut pointer = pointer.as_object_mut().expect("insert_by_path lead to non object");
+        let mut pointer = pointer
+            .as_object_mut()
+            .expect("insert_by_path lead to non object");
         while let Some(token) = tokens.next() {
             if tokens.peek().is_none() {
                 // simply insert the value
@@ -317,10 +319,14 @@ impl EntityPath for Entity {
                 return;
             }
 
-            pointer = pointer.entry(token).or_insert_with(|| {
-                let child = Entity::with_capacity(1);
-                serde_json::Value::Object(child)
-            }).as_object_mut().expect("insert_by_path lead to non object");
+            pointer = pointer
+                .entry(token)
+                .or_insert_with(|| {
+                    let child = Entity::with_capacity(1);
+                    serde_json::Value::Object(child)
+                })
+                .as_object_mut()
+                .expect("insert_by_path lead to non object");
         }
     }
 }
@@ -380,103 +386,124 @@ mod tests {
         };
 
         entity.insert_by_path("child.bar", json!("hello"));
-        assert_eq!(Value::Object(entity.clone()), json!({
-            "fiz": "buz",
-            "child": {
-                "bar": "hello",
-            },
-        }));
+        assert_eq!(
+            Value::Object(entity.clone()),
+            json!({
+                "fiz": "buz",
+                "child": {
+                    "bar": "hello",
+                },
+            })
+        );
 
         entity.insert_by_path("another.nested.child.value", json!(42));
-        assert_eq!(Value::Object(entity.clone()), json!({
-            "fiz": "buz",
-            "child": {
-                "bar": "hello",
-            },
-            "another": {
-                "nested": {
-                    "child": {
-                        "value": 42,
+        assert_eq!(
+            Value::Object(entity.clone()),
+            json!({
+                "fiz": "buz",
+                "child": {
+                    "bar": "hello",
+                },
+                "another": {
+                    "nested": {
+                        "child": {
+                            "value": 42,
+                        },
                     },
                 },
-            },
-        }));
+            })
+        );
 
         entity.insert_by_path("fiz", json!(42));
-        assert_eq!(Value::Object(entity.clone()), json!({
-            "fiz": 42,
-            "child": {
-                "bar": "hello",
-            },
-            "another": {
-                "nested": {
-                    "child": {
-                        "value": 42,
+        assert_eq!(
+            Value::Object(entity.clone()),
+            json!({
+                "fiz": 42,
+                "child": {
+                    "bar": "hello",
+                },
+                "another": {
+                    "nested": {
+                        "child": {
+                            "value": 42,
+                        },
                     },
                 },
-            },
-        }));
+            })
+        );
 
         entity.insert_by_path("child.bar", json!("buz"));
-        assert_eq!(Value::Object(entity.clone()), json!({
-            "fiz": 42,
-            "child": {
-                "bar": "buz",
-            },
-            "another": {
-                "nested": {
-                    "child": {
-                        "value": 42,
+        assert_eq!(
+            Value::Object(entity.clone()),
+            json!({
+                "fiz": 42,
+                "child": {
+                    "bar": "buz",
+                },
+                "another": {
+                    "nested": {
+                        "child": {
+                            "value": 42,
+                        },
                     },
                 },
-            },
-        }));
+            })
+        );
 
         entity.insert_by_path("child.hello", json!("world"));
-        assert_eq!(Value::Object(entity.clone()), json!({
-            "fiz": 42,
-            "child": {
-                "bar": "buz",
-                "hello": "world",
-            },
-            "another": {
-                "nested": {
-                    "child": {
-                        "value": 42,
+        assert_eq!(
+            Value::Object(entity.clone()),
+            json!({
+                "fiz": 42,
+                "child": {
+                    "bar": "buz",
+                    "hello": "world",
+                },
+                "another": {
+                    "nested": {
+                        "child": {
+                            "value": 42,
+                        },
                     },
                 },
-            },
-        }));
+            })
+        );
 
         entity.insert_by_path("another.nested.sibling", json!({"type": "cousin"}));
-        assert_eq!(Value::Object(entity.clone()), json!({
-            "fiz": 42,
-            "child": {
-                "bar": "buz",
-                "hello": "world",
-            },
-            "another": {
-                "nested": {
-                    "child": {
-                        "value": 42,
-                    },
-                    "sibling": {
-                        "type": "cousin",
+        assert_eq!(
+            Value::Object(entity.clone()),
+            json!({
+                "fiz": 42,
+                "child": {
+                    "bar": "buz",
+                    "hello": "world",
+                },
+                "another": {
+                    "nested": {
+                        "child": {
+                            "value": 42,
+                        },
+                        "sibling": {
+                            "type": "cousin",
+                        },
                     },
                 },
-            },
-        }));
-        
+            })
+        );
+
         entity.insert_by_path("another.nested", json!("replaced"));
-        assert_eq!(Value::Object(entity.clone()), json!({
-            "fiz": 42,
-            "child": {
-                "bar": "buz",
-                "hello": "world",
-            },
-            "another": {
-                "nested": "replaced"
-            },
-        }));
+        assert_eq!(
+            Value::Object(entity.clone()),
+            json!({
+                "fiz": 42,
+                "child": {
+                    "bar": "buz",
+                    "hello": "world",
+                },
+                "another": {
+                    "nested": "replaced"
+                },
+            })
+        );
     }
 }
