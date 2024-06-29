@@ -1,3 +1,6 @@
+# NEXT-RELEASE
+- "To-One-Association" values are now imported correctly
+
 # v0.3.0
 - Added `associations` entry for schema (used on export only)
 - Implemented proper `entity_path` resolution with optional chaining `?.` for export

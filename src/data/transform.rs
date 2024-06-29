@@ -76,7 +76,7 @@ pub fn deserialize_row(
                     .context("failed to get column of row")?;
                 let raw_value_lowercase = raw_value.to_lowercase();
 
-                let json_value = if raw_value_lowercase == "null" {
+                let json_value = if raw_value_lowercase == "null" || raw_value.trim().is_empty() {
                     serde_json::Value::Null
                 } else if raw_value_lowercase == "true" {
                     serde_json::Value::Bool(true)
@@ -88,8 +88,7 @@ pub fn deserialize_row(
                     serde_json::Value::String(raw_value.to_owned())
                 };
 
-                // ToDo: insert path must be considered and create child json objects (maps)
-                entity.insert(path_mapping.entity_path.clone(), json_value);
+                entity.insert_by_path(&path_mapping.entity_path, json_value);
             }
             Mapping::ByScript(_script_mapping) => {
                 // nothing to do here, the script already executed beforehand
@@ -294,11 +293,35 @@ impl EntityPath for Entity {
             panic!("empty entity_path encountered");
         }
 
-        let mut tokens = path.split('.').map(|t| t.trim_end_matches('?'));
+        let mut tokens = path.split('.').map(|t| t.trim_end_matches('?')).peekable();
 
         let first_token = tokens.next().expect("has a value because non empty");
+        let pointer = self.entry(first_token).or_insert_with(|| {
+            if tokens.peek().is_none() {
+                value.clone()
+            } else {
+                let child = Entity::with_capacity(1);
+                serde_json::Value::Object(child)
+            }
+        });
+        if tokens.peek().is_none() {
+            *pointer = value;
+            return;
+        }
 
-        todo!("implement me and write tests")
+        let mut pointer = pointer.as_object_mut().expect("insert_by_path lead to non object");
+        while let Some(token) = tokens.next() {
+            if tokens.peek().is_none() {
+                // simply insert the value
+                pointer.insert(token.to_string(), value);
+                return;
+            }
+
+            pointer = pointer.entry(token).or_insert_with(|| {
+                let child = Entity::with_capacity(1);
+                serde_json::Value::Object(child)
+            }).as_object_mut().expect("insert_by_path lead to non object");
+        }
     }
 }
 
@@ -344,5 +367,116 @@ mod tests {
         assert_eq!(entity.get_by_path("hello?.bar"), Some(&Value::Null));
         assert_eq!(entity.get_by_path("child.hello"), Some(&Value::Null));
         assert_eq!(entity.get_by_path("child.hello?.bar"), Some(&Value::Null));
+    }
+
+    #[test]
+    fn test_insert_by_path() {
+        let entity = json!({
+            "fiz": "buz"
+        });
+        let mut entity = match entity {
+            Value::Object(map) => map,
+            _ => unreachable!(),
+        };
+
+        entity.insert_by_path("child.bar", json!("hello"));
+        assert_eq!(Value::Object(entity.clone()), json!({
+            "fiz": "buz",
+            "child": {
+                "bar": "hello",
+            },
+        }));
+
+        entity.insert_by_path("another.nested.child.value", json!(42));
+        assert_eq!(Value::Object(entity.clone()), json!({
+            "fiz": "buz",
+            "child": {
+                "bar": "hello",
+            },
+            "another": {
+                "nested": {
+                    "child": {
+                        "value": 42,
+                    },
+                },
+            },
+        }));
+
+        entity.insert_by_path("fiz", json!(42));
+        assert_eq!(Value::Object(entity.clone()), json!({
+            "fiz": 42,
+            "child": {
+                "bar": "hello",
+            },
+            "another": {
+                "nested": {
+                    "child": {
+                        "value": 42,
+                    },
+                },
+            },
+        }));
+
+        entity.insert_by_path("child.bar", json!("buz"));
+        assert_eq!(Value::Object(entity.clone()), json!({
+            "fiz": 42,
+            "child": {
+                "bar": "buz",
+            },
+            "another": {
+                "nested": {
+                    "child": {
+                        "value": 42,
+                    },
+                },
+            },
+        }));
+
+        entity.insert_by_path("child.hello", json!("world"));
+        assert_eq!(Value::Object(entity.clone()), json!({
+            "fiz": 42,
+            "child": {
+                "bar": "buz",
+                "hello": "world",
+            },
+            "another": {
+                "nested": {
+                    "child": {
+                        "value": 42,
+                    },
+                },
+            },
+        }));
+
+        entity.insert_by_path("another.nested.sibling", json!({"type": "cousin"}));
+        assert_eq!(Value::Object(entity.clone()), json!({
+            "fiz": 42,
+            "child": {
+                "bar": "buz",
+                "hello": "world",
+            },
+            "another": {
+                "nested": {
+                    "child": {
+                        "value": 42,
+                    },
+                    "sibling": {
+                        "type": "cousin",
+                    },
+                },
+            },
+        }));
+        
+        entity.insert_by_path("another.nested", json!("replaced"));
+        assert_eq!(Value::Object(entity.clone()), json!({
+            "fiz": 42,
+            "child": {
+                "bar": "buz",
+                "hello": "world",
+            },
+            "another": {
+                "nested": "replaced"
+            },
+        }));
     }
 }
