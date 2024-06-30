@@ -210,6 +210,8 @@ fn get_base_engine() -> Engine {
     array_package.register_into_engine(&mut engine);
 
     // ToDo: add custom utility functions to engine
+    engine.register_fn("get_default", script::get_default);
+
     // Some reference implementations below
     /*
     engine.register_type::<Uuid>();
@@ -225,6 +227,40 @@ fn get_base_engine() -> Engine {
      */
 
     engine
+}
+
+/// utilities for inside scripts
+mod script {
+    /// Imitate
+    /// https://github.com/shopware/shopware/blob/03cfe8cca937e6e45c9c3e15821d1449dfd01d82/src/Core/Defaults.php
+    pub fn get_default(name: &str) -> String {
+        match name {
+            "LANGUAGE_SYSTEM" => "2fbb5fe2e29a4d70aa5854ce7ce3e20b".to_string(),
+            "LIVE_VERSION" => "0fa91ce3e96a4bc2be4bd9ce752c3425".to_string(),
+            "CURRENCY" => "b7d2554b0ce847cd82f3ac9bd1c0dfca".to_string(),
+            "SALES_CHANNEL_TYPE_API" => "f183ee5650cf4bdb8a774337575067a6".to_string(),
+            "SALES_CHANNEL_TYPE_STOREFRONT" => "8a243080f92e4c719546314b577cf82b".to_string(),
+            "SALES_CHANNEL_TYPE_PRODUCT_COMPARISON" => "ed535e5722134ac1aa6524f73e26881b".to_string(),
+            "STORAGE_DATE_TIME_FORMAT" => "Y-m-d H:i:s.v".to_string(),
+            "STORAGE_DATE_FORMAT" => "Y-m-d".to_string(),
+            "CMS_PRODUCT_DETAIL_PAGE" => "7a6d253a67204037966f42b0119704d5".to_string(),
+            n => panic!(
+                "get_default called with '{}' but there is no such definition. Have a look into Shopware/src/Core/Defaults.php. Available constants: {:?}",
+                n,
+                vec![
+                    "LANGUAGE_SYSTEM",
+                    "LIVE_VERSION",
+                    "CURRENCY",
+                    "SALES_CHANNEL_TYPE_API",
+                    "SALES_CHANNEL_TYPE_STOREFRONT",
+                    "SALES_CHANNEL_TYPE_PRODUCT_COMPARISON",
+                    "STORAGE_DATE_TIME_FORMAT",
+                    "STORAGE_DATE_FORMAT",
+                    "CMS_PRODUCT_DETAIL_PAGE",
+                ]
+            )
+        }
+    }
 }
 
 trait EntityPath {

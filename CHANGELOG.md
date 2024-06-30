@@ -1,5 +1,5 @@
 # NEXT-RELEASE
-
+- Added `get_default(name)` function to scripting. It allows lookup of constants like the `Shopware/src/Core/Defaults.php`
 
 # v0.4.0
 - "To-One-Association" values are now imported correctly

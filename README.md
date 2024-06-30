@@ -111,8 +111,9 @@ serialize_script: |
   // debug(entity); // contains the full entity object from the API (can be huge!)
   // print(row); // will be empty
   
-  // ToDo: add convenience function to lookup currencyId by iso code
-  let price = entity.price.find(|p| p.currencyId == "b7d2554b0ce847cd82f3ac9bd1c0dfca");
+  // Use 'get_default' to look up a value equivalent to Defaults.php
+  let default_currency = get_default("CURRENCY");
+  let price = entity.price.find(|p| p.currencyId == default_currency);
   row.gross_price_eur = price.gross;
   row.net_price_eur = price.net;
 
@@ -131,6 +132,6 @@ deserialize_script: |
     gross: row.gross_price_eur,
     net: row.net_price_eur,
     linked: true,
-    currencyId: "b7d2554b0ce847cd82f3ac9bd1c0dfca",
+    currencyId: get_default("CURRENCY"),
   });
 ```
