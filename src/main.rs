@@ -2,7 +2,7 @@ use crate::api::SwClient;
 use crate::config::{Credentials, Mapping, Schema};
 use crate::data::{export, import, prepare_scripting_environment, ScriptingEnvironment};
 use anyhow::Context;
-use clap::{ArgAction, Parser, Subcommand};
+use clap::{Parser, Subcommand};
 use std::collections::HashSet;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -55,10 +55,9 @@ enum Commands {
         #[arg(short, long)]
         limit: Option<u64>,
 
-        /// Verbose output, used for debugging
-        #[arg(short, long, action = ArgAction::SetTrue)]
-        verbose: bool,
-
+        // Verbose output, used for debugging
+        // #[arg(short, long, action = ArgAction::SetTrue)]
+        // verbose: bool,
         /// How many requests can be "in-flight" at the same time
         #[arg(short, long, default_value = "8")]
         in_flight_limit: usize,
@@ -78,7 +77,6 @@ pub struct SyncContext {
     /// specifies the input or output file
     pub file: PathBuf,
     pub limit: Option<u64>,
-    pub verbose: bool,
     pub scripting_environment: ScriptingEnvironment,
     pub associations: HashSet<String>,
 }
@@ -98,10 +96,10 @@ async fn main() -> anyhow::Result<()> {
             schema,
             file,
             limit,
-            verbose,
+            // verbose,
             in_flight_limit,
         } => {
-            let context = create_context(schema, file, limit, verbose, in_flight_limit).await?;
+            let context = create_context(schema, file, limit, in_flight_limit).await?;
 
             match mode {
                 SyncMode::Import => {
@@ -151,7 +149,6 @@ async fn create_context(
     schema: PathBuf,
     file: PathBuf,
     limit: Option<u64>,
-    verbose: bool,
     in_flight_limit: usize,
 ) -> anyhow::Result<SyncContext> {
     let serialized_schema = tokio::fs::read_to_string(schema)
@@ -187,7 +184,6 @@ async fn create_context(
         scripting_environment,
         file,
         limit,
-        verbose,
         associations,
     })
 }

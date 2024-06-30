@@ -12,7 +12,8 @@ to export data into (CSV) files or import data from (CSV) files.
 
 - It's fast, with a focus on performance
 - Every entity and field available in the API can be exported / imported
-- Import / Export profiles are just `.yaml` files
+- Supports data filtering and sorting using the API criteria
+- Import / Export profiles (schema's) are just `.yaml` files
   - Which can be copied + adapted + shared freely
 - Profiles include a scripting engine for arbitrary data transformations
 - For now only supports CSV files
@@ -23,7 +24,7 @@ to export data into (CSV) files or import data from (CSV) files.
 ```bash
 cargo install sw-sync-cli
 ```
-Same command can be used for updates.
+Same command can be used for updates. See [crate](https://crates.io/crates/sw-sync-cli)
 
 ### Manual
 head to [GitHub releases](https://github.com/MalteJanz/sw-sync-cli/releases) and download the right binary for your operating system.
@@ -31,7 +32,7 @@ Then either execute the binary directly or put it in your `PATH`.
 
 ## Usage
 
-1. Setup an [integration](https://docs.shopware.com/en/shopware-6-en/settings/system/integrationen?category=shopware-6-en/settings/system) inside shopware.
+1. Set up an [integration](https://docs.shopware.com/en/shopware-6-en/settings/system/integrationen?category=shopware-6-en/settings/system) inside shopware.
 2. Call `sw-sync-cli auth` with the required arguments (credentials)
 
 > [!Note]  
@@ -40,10 +41,13 @@ Then either execute the binary directly or put it in your `PATH`.
 
 3. Call `sw-sync-cli sync` in either `-m import` or `-m export` mode, with a profile (`schema.yaml`) and data file `data.csv`
 
-### Profiles
+> [!Info]
+> You can call `sw-sync-cli help` at any time to get more information
+
+### Profiles (sync schema)
 
 To get started take a look at [Profiles in this repository](https://github.com/MalteJanz/sw-sync-cli/tree/main/profiles).
-The structure of a profile `.yaml` is as follows:
+The structure of a profile (sync schema) `.yaml` is as follows:
 
 ```yaml
 entity: product
@@ -129,5 +133,4 @@ deserialize_script: |
     linked: true,
     currencyId: "b7d2554b0ce847cd82f3ac9bd1c0dfca",
   });
-
 ```
