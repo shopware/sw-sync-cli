@@ -1,10 +1,12 @@
+pub mod filter;
+
+use crate::api::filter::{Criteria, CriteriaFilter};
 use crate::config::Credentials;
 use anyhow::anyhow;
 use reqwest::header::{HeaderMap, HeaderValue};
 use reqwest::{header, Client, Response, StatusCode};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 use thiserror::Error;
@@ -329,126 +331,3 @@ pub struct SwListResponse {
 }
 
 pub type Entity = serde_json::Map<String, serde_json::Value>;
-
-#[derive(Debug, Serialize)]
-pub struct Criteria {
-    pub limit: u64,
-    pub page: u64,
-    #[serde(skip_serializing_if = "Vec::is_empty")]
-    pub filter: Vec<CriteriaFilter>,
-    #[serde(skip_serializing_if = "Vec::is_empty")]
-    pub sort: Vec<CriteriaSorting>,
-    #[serde(skip_serializing_if = "BTreeMap::is_empty")]
-    pub associations: BTreeMap<String, EmptyObject>,
-}
-
-impl Default for Criteria {
-    fn default() -> Self {
-        Self {
-            limit: Self::MAX_LIMIT,
-            page: 1,
-            sort: vec![],
-            filter: vec![],
-            associations: BTreeMap::new(),
-        }
-    }
-}
-
-impl Criteria {
-    /// Maximum limit accepted by the API server
-    pub const MAX_LIMIT: u64 = 500;
-
-    pub fn add_filter(&mut self, filter: CriteriaFilter) {
-        self.filter.push(filter);
-    }
-
-    pub fn add_sorting(&mut self, sorting: CriteriaSorting) {
-        self.sort.push(sorting);
-    }
-
-    pub fn add_association<S: Into<String>>(&mut self, association: S) {
-        self.associations.insert(association.into(), EmptyObject {});
-    }
-}
-
-#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
-pub struct CriteriaSorting {
-    pub field: String,
-    pub order: CriteriaSortingOrder,
-}
-
-#[derive(Debug, Clone, Copy, Ord, PartialOrd, Eq, PartialEq, Serialize, Deserialize)]
-pub enum CriteriaSortingOrder {
-    #[serde(rename = "ASC")]
-    Ascending,
-    #[serde(rename = "DESC")]
-    Descending,
-}
-
-#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
-#[serde(tag = "type", rename_all = "lowercase")]
-pub enum CriteriaFilter {
-    Equals {
-        field: String,
-        value: serde_json::Value,
-    },
-}
-
-#[derive(Debug, Serialize)]
-pub struct EmptyObject {
-    // no fields
-}
-
-#[cfg(test)]
-mod tests {
-    use crate::api::{Criteria, CriteriaFilter, CriteriaSorting, CriteriaSortingOrder};
-
-    #[test]
-    fn criteria_serialize_association() {
-        let mut criteria = Criteria {
-            limit: 10,
-            page: 2,
-            ..Default::default()
-        };
-        criteria.add_association("manufacturer");
-        criteria.add_association("cover");
-
-        let json = serde_json::to_string(&criteria).unwrap();
-        assert_eq!(
-            json,
-            "{\"limit\":10,\"page\":2,\"associations\":{\"cover\":{},\"manufacturer\":{}}}"
-        );
-    }
-
-    #[test]
-    fn criteria_serialize_sorting() {
-        let mut criteria = Criteria {
-            limit: 10,
-            page: 2,
-            ..Default::default()
-        };
-        criteria.add_sorting(CriteriaSorting {
-            field: "manufacturerId".to_string(),
-            order: CriteriaSortingOrder::Descending,
-        });
-
-        let json = serde_json::to_string(&criteria).unwrap();
-        assert_eq!(json, "{\"limit\":10,\"page\":2,\"sort\":[{\"field\":\"manufacturerId\",\"order\":\"DESC\"}]}");
-    }
-
-    #[test]
-    fn criteria_serialize_filter() {
-        let mut criteria = Criteria {
-            limit: 10,
-            page: 2,
-            ..Default::default()
-        };
-        criteria.add_filter(CriteriaFilter::Equals {
-            field: "parentId".to_string(),
-            value: serde_json::Value::Null,
-        });
-
-        let json = serde_json::to_string(&criteria).unwrap();
-        assert_eq!(json, "{\"limit\":10,\"page\":2,\"filter\":[{\"type\":\"equals\",\"field\":\"parentId\",\"value\":null}]}");
-    }
-}

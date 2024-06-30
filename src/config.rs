@@ -1,4 +1,4 @@
-use crate::api::{CriteriaFilter, CriteriaSorting};
+use crate::api::filter::{CriteriaFilter, CriteriaSorting};
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 

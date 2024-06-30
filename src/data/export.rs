@@ -1,4 +1,4 @@
-use crate::api::Criteria;
+use crate::api::filter::Criteria;
 use crate::data::transform::serialize_entity;
 use crate::SyncContext;
 use std::cmp;
