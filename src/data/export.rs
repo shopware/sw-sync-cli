@@ -55,6 +55,7 @@ pub async fn export(context: Arc<SyncContext>) -> anyhow::Result<()> {
     Ok(())
 }
 
+#[allow(clippy::type_complexity)]
 async fn write_to_file(
     worker_handles: Vec<JoinHandle<anyhow::Result<(u64, Vec<Vec<String>>)>>>,
     context: &SyncContext,

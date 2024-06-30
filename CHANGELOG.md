@@ -1,4 +1,7 @@
 # NEXT-RELEASE
+
+
+# v0.4.0
 - "To-One-Association" values are now imported correctly
   - Added profile `product_with_manufacturer.yaml` as an example
 - Fixed reported request timings (they were measured wrong, longer than actual)

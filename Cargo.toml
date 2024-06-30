@@ -1,8 +1,8 @@
 [package]
 name = "sw-sync-cli"
-version = "0.3.0"
+version = "0.4.0"
 edition = "2021"
-description = "CLI for fast and flexible data transfer between shopware <-> (CSV) file over API"
+description = "CLI for fast and flexible data transfer between shopware and (CSV) files over API"
 keywords = ["cli", "shopware", "import", "export"]
 categories = ["command-line-utilities", "development-tools", "web-programming"]
 authors = ["Malte Janz <service.malte.j@protonmail.com>"]
