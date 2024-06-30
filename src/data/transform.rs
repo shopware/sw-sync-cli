@@ -270,6 +270,8 @@ trait EntityPath {
     fn get_by_path(&self, path: &str) -> Option<&serde_json::Value>;
 
     /// Insert a value into a given path
+    /// ## Invariant:
+    /// Does nothing if the value is Null (to not create objects with only null values)
     fn insert_by_path(&mut self, path: &str, value: serde_json::Value);
 }
 
@@ -327,6 +329,9 @@ impl EntityPath for Entity {
     fn insert_by_path(&mut self, path: &str, value: serde_json::Value) {
         if path.is_empty() {
             panic!("empty entity_path encountered");
+        }
+        if value.is_null() {
+            return; // do nothing
         }
 
         let mut tokens = path.split('.').map(|t| t.trim_end_matches('?')).peekable();
@@ -528,6 +533,21 @@ mod tests {
         );
 
         entity.insert_by_path("another.nested", json!("replaced"));
+        assert_eq!(
+            Value::Object(entity.clone()),
+            json!({
+                "fiz": 42,
+                "child": {
+                    "bar": "buz",
+                    "hello": "world",
+                },
+                "another": {
+                    "nested": "replaced"
+                },
+            })
+        );
+
+        entity.insert_by_path("another.cousin.value", serde_json::Value::Null);
         assert_eq!(
             Value::Object(entity.clone()),
             json!({
