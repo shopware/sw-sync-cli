@@ -35,13 +35,13 @@ Then either execute the binary directly or put it in your `PATH`.
 1. Set up an [integration](https://docs.shopware.com/en/shopware-6-en/settings/system/integrationen?category=shopware-6-en/settings/system) inside shopware.
 2. Call `sw-sync-cli auth` with the required arguments (credentials)
 
-> [!Note]  
+> [!WARNING]  
 > This will create a `.credentials.toml` file in your current working directory.
 > This file contains your credentials in plain text, you might want to remove it again after you are done syncing.
 
 3. Call `sw-sync-cli sync` in either `-m import` or `-m export` mode, with a profile (`schema.yaml`) and data file `data.csv`
 
-> [!Info]
+> [!Note]  
 > You can call `sw-sync-cli help` at any time to get more information
 
 ### Profiles (sync schema)

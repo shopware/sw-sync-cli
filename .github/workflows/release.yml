@@ -89,20 +89,21 @@ jobs:
       run: 7z a -ttar -so -an ./target/release/${{ env.RELEASE_BIN }} ${{ env.RELEASE_ADDS }} | 7z a -tgzip -si ./artifacts/${{ env.RELEASE_BIN }}-${{ needs.tag_version.outputs.version }}-${{ matrix.build }}${{ matrix.output_ending }}
       if: matrix.os == 'ubuntu-latest'
 
-    - name: Install p7zip on MacOS
+    # should not be needed anymore
+    #- name: Install p7zip on MacOS
       # 7Zip not available on MacOS, install p7zip via homebrew.
-      run: brew install p7zip
-      if: matrix.os == 'macos-latest' || matrix.os == 'macos-14'
+    #  run: brew install p7zip
+    #  if: matrix.os == 'macos-latest' || matrix.os == 'macos-14'
     
     - name: Create archive for MacOS
       run: 7z a -ttar -so -an ./target/release/${{ env.RELEASE_BIN }} ${{ env.RELEASE_ADDS }} | 7z a -tgzip -si ./artifacts/${{ env.RELEASE_BIN }}-${{ needs.tag_version.outputs.version }}-${{ matrix.build }}${{ matrix.output_ending }}
       if: matrix.os == 'macos-latest' || matrix.os == 'macos-14'
 
     - name: Upload artifact
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
-        name: executables
         path: artifacts/*
+        name: executable-${{ matrix.build }}
         if-no-files-found: error
 
 
@@ -112,10 +113,11 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/download-artifact@v3
+      - uses: actions/download-artifact@v4
         with:
-          name: executables
           path: artifacts
+          pattern: executable-*
+          merge-multiple: true
 
       - name: Create draft release
         id: create_release

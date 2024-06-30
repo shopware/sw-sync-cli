@@ -62,8 +62,5 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
 
-      - uses: giraffate/clippy-action@v1
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          clippy_flags: --all-features
-          reporter: 'github-pr-review'
+      - name: Run clippy
+        run: cargo clippy --locked
