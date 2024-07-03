@@ -1,64 +1,24 @@
+//! Everything related to data transformations
+
+pub mod script;
+
 use crate::api::Entity;
-use crate::config::Mapping;
+use crate::config_file::Mapping;
 use crate::SyncContext;
 use anyhow::Context;
 use csv::StringRecord;
-use rhai::packages::{BasicArrayPackage, CorePackage, MoreStringPackage, Package};
-use rhai::{Engine, Position, Scope, AST};
 use std::str::FromStr;
 
-/// Deserialize a single row of the input file into a json object
+/// Deserialize a single row of the input (CSV) file into a json object
 pub fn deserialize_row(
     headers: &StringRecord,
     row: StringRecord,
     context: &SyncContext,
-) -> anyhow::Result<serde_json::Map<String, serde_json::Value>> {
-    let mut entity = if let Some(deserialize) = &context.scripting_environment.deserialize {
-        let engine = &context.scripting_environment.engine;
-
-        let mut scope = Scope::new();
-
-        // build row object
-        let mut script_row = rhai::Map::new();
-        let script_mappings = context.schema.mappings.iter().filter_map(|m| match m {
-            Mapping::ByScript(s) => Some(s),
-            _ => None,
-        });
-        for mapping in script_mappings {
-            let column_index = headers
-                .iter()
-                .position(|h| h == mapping.file_column)
-                .context(format!(
-                    "Can't find column '{}' in CSV headers",
-                    mapping.file_column
-                ))?;
-
-            let value = row
-                .get(column_index)
-                .context("failed to get column of row")?;
-
-            script_row.insert(mapping.key.as_str().into(), value.into());
-        }
-
-        scope.push_constant("row", script_row);
-        let entity_dynamic = rhai::Map::new();
-        scope.push("entity", entity_dynamic);
-
-        engine.run_ast_with_scope(&mut scope, deserialize)?;
-
-        let row_result: rhai::Map = scope
-            .get_value("entity")
-            .expect("row should exist in script scope");
-        let mut entity_after_script = serde_json::Map::with_capacity(context.schema.mappings.len());
-        for (key, value) in row_result {
-            let json_value: serde_json::Value = rhai::serde::from_dynamic(&value)?;
-            entity_after_script.insert(key.to_string(), json_value);
-        }
-
-        entity_after_script
-    } else {
-        serde_json::Map::with_capacity(context.schema.mappings.len())
-    };
+) -> anyhow::Result<Entity> {
+    // Either run deserialize script or create initial empty entity object
+    let mut entity = context
+        .scripting_environment
+        .run_deserialize(headers, &row, context)?;
 
     for mapping in &context.schema.mappings {
         match mapping {
@@ -74,19 +34,7 @@ pub fn deserialize_row(
                 let raw_value = row
                     .get(column_index)
                     .context("failed to get column of row")?;
-                let raw_value_lowercase = raw_value.to_lowercase();
-
-                let json_value = if raw_value_lowercase == "null" || raw_value.trim().is_empty() {
-                    serde_json::Value::Null
-                } else if raw_value_lowercase == "true" {
-                    serde_json::Value::Bool(true)
-                } else if raw_value_lowercase == "false" {
-                    serde_json::Value::Bool(false)
-                } else if let Ok(number) = serde_json::Number::from_str(raw_value) {
-                    serde_json::Value::Number(number)
-                } else {
-                    serde_json::Value::String(raw_value.to_owned())
-                };
+                let json_value = get_json_value_from_string(raw_value);
 
                 entity.insert_by_path(&path_mapping.entity_path, json_value);
             }
@@ -101,26 +49,9 @@ pub fn deserialize_row(
 
 /// Serialize a single entity (as json object) into a single row (string columns)
 pub fn serialize_entity(entity: Entity, context: &SyncContext) -> anyhow::Result<Vec<String>> {
-    let script_row = if let Some(serialize) = &context.scripting_environment.serialize {
-        let engine = &context.scripting_environment.engine;
-
-        let mut scope = Scope::new();
-        let script_entity = rhai::serde::to_dynamic(&entity)?;
-        scope.push_dynamic("entity", script_entity);
-        let row_dynamic = rhai::Map::new();
-        scope.push("row", row_dynamic);
-
-        engine.run_ast_with_scope(&mut scope, serialize)?;
-
-        let row_result: rhai::Map = scope
-            .get_value("row")
-            .expect("row should exist in script scope");
-        row_result
-    } else {
-        rhai::Map::new()
-    };
-
+    let script_row = context.scripting_environment.run_serialize(&entity)?;
     let mut row = Vec::with_capacity(context.schema.mappings.len());
+
     for mapping in &context.schema.mappings {
         match mapping {
             Mapping::ByPath(path_mapping) => {
@@ -155,111 +86,18 @@ pub fn serialize_entity(entity: Entity, context: &SyncContext) -> anyhow::Result
     Ok(row)
 }
 
-#[derive(Debug)]
-pub struct ScriptingEnvironment {
-    engine: Engine,
-    serialize: Option<AST>,
-    deserialize: Option<AST>,
-}
-
-pub fn prepare_scripting_environment(
-    raw_serialize_script: &str,
-    raw_deserialize_script: &str,
-) -> anyhow::Result<ScriptingEnvironment> {
-    let engine = get_base_engine();
-    let serialize_ast = if !raw_serialize_script.is_empty() {
-        let ast = engine
-            .compile(raw_serialize_script)
-            .context("serialize_script compilation failed")?;
-        Some(ast)
+fn get_json_value_from_string(raw_input: &str) -> serde_json::Value {
+    let raw_input_lowercase = raw_input.to_lowercase();
+    if raw_input_lowercase == "null" || raw_input.trim().is_empty() {
+        serde_json::Value::Null
+    } else if raw_input_lowercase == "true" {
+        serde_json::Value::Bool(true)
+    } else if raw_input_lowercase == "false" {
+        serde_json::Value::Bool(false)
+    } else if let Ok(number) = serde_json::Number::from_str(raw_input) {
+        serde_json::Value::Number(number)
     } else {
-        None
-    };
-    let deserialize_ast = if !raw_deserialize_script.is_empty() {
-        let ast = engine
-            .compile(raw_deserialize_script)
-            .context("serialize_script compilation failed")?;
-        Some(ast)
-    } else {
-        None
-    };
-
-    Ok(ScriptingEnvironment {
-        engine,
-        serialize: serialize_ast,
-        deserialize: deserialize_ast,
-    })
-}
-
-fn get_base_engine() -> Engine {
-    let mut engine = Engine::new_raw();
-    // Default print/debug implementations
-    engine.on_print(|text| println!("{text}"));
-    engine.on_debug(|text, source, pos| match (source, pos) {
-        (Some(source), Position::NONE) => println!("{source} | {text}"),
-        (Some(source), pos) => println!("{source} @ {pos:?} | {text}"),
-        (None, Position::NONE) => println!("{text}"),
-        (None, pos) => println!("{pos:?} | {text}"),
-    });
-
-    let core_package = CorePackage::new();
-    core_package.register_into_engine(&mut engine);
-    let string_package = MoreStringPackage::new();
-    string_package.register_into_engine(&mut engine);
-    let array_package = BasicArrayPackage::new();
-    array_package.register_into_engine(&mut engine);
-
-    // ToDo: add custom utility functions to engine
-    engine.register_fn("get_default", script::get_default);
-
-    // Some reference implementations below
-    /*
-    engine.register_type::<Uuid>();
-    engine.register_fn("uuid", scripts::uuid);
-    engine.register_fn("uuidFromStr", scripts::uuid_from_str);
-
-    engine.register_type::<scripts::Mapper>();
-    engine.register_fn("map", scripts::Mapper::map);
-    engine.register_fn("get", scripts::Mapper::get);
-
-    engine.register_type::<scripts::DB>();
-    engine.register_fn("fetchFirst", scripts::DB::fetch_first);
-     */
-
-    engine
-}
-
-/// utilities for inside scripts
-mod script {
-    /// Imitate
-    /// https://github.com/shopware/shopware/blob/03cfe8cca937e6e45c9c3e15821d1449dfd01d82/src/Core/Defaults.php
-    pub fn get_default(name: &str) -> String {
-        match name {
-            "LANGUAGE_SYSTEM" => "2fbb5fe2e29a4d70aa5854ce7ce3e20b".to_string(),
-            "LIVE_VERSION" => "0fa91ce3e96a4bc2be4bd9ce752c3425".to_string(),
-            "CURRENCY" => "b7d2554b0ce847cd82f3ac9bd1c0dfca".to_string(),
-            "SALES_CHANNEL_TYPE_API" => "f183ee5650cf4bdb8a774337575067a6".to_string(),
-            "SALES_CHANNEL_TYPE_STOREFRONT" => "8a243080f92e4c719546314b577cf82b".to_string(),
-            "SALES_CHANNEL_TYPE_PRODUCT_COMPARISON" => "ed535e5722134ac1aa6524f73e26881b".to_string(),
-            "STORAGE_DATE_TIME_FORMAT" => "Y-m-d H:i:s.v".to_string(),
-            "STORAGE_DATE_FORMAT" => "Y-m-d".to_string(),
-            "CMS_PRODUCT_DETAIL_PAGE" => "7a6d253a67204037966f42b0119704d5".to_string(),
-            n => panic!(
-                "get_default called with '{}' but there is no such definition. Have a look into Shopware/src/Core/Defaults.php. Available constants: {:?}",
-                n,
-                vec![
-                    "LANGUAGE_SYSTEM",
-                    "LIVE_VERSION",
-                    "CURRENCY",
-                    "SALES_CHANNEL_TYPE_API",
-                    "SALES_CHANNEL_TYPE_STOREFRONT",
-                    "SALES_CHANNEL_TYPE_PRODUCT_COMPARISON",
-                    "STORAGE_DATE_TIME_FORMAT",
-                    "STORAGE_DATE_FORMAT",
-                    "CMS_PRODUCT_DETAIL_PAGE",
-                ]
-            )
-        }
+        serde_json::Value::String(raw_input.to_owned())
     }
 }
 

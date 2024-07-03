@@ -1,10 +1,11 @@
-use crate::config::Mapping;
+use crate::api::Entity;
+use crate::config_file::{EntityPathMapping, Mapping};
 
 /// Validate paths for entity
 pub fn validate_paths_for_entity(
     entity: &str,
     mappings: &Vec<Mapping>,
-    api_schema: &serde_json::Map<String, serde_json::Value>,
+    api_schema: &Entity,
 ) -> anyhow::Result<()> {
     // if entity name is not set in api_schema throw an exception
     if !api_schema.contains_key(entity) {
@@ -46,7 +47,7 @@ pub fn validate_paths_for_entity(
         let path = path[1..].join(".");
 
         // create a new mapping with the new path
-        let mapping = Mapping::ByPath(crate::config::EntityPathMapping {
+        let mapping = Mapping::ByPath(EntityPathMapping {
             file_column: path_mapping.file_column.clone(),
             entity_path: path,
         });
@@ -60,17 +61,16 @@ pub fn validate_paths_for_entity(
 
 #[cfg(test)]
 mod tests {
+    use crate::config_file::{EntityPathMapping, Mapping};
     use serde_json::json;
 
     #[test]
     fn validate_non_existent_entity() {
         let entity = "nonexistent";
-        let mapping = vec![crate::config::Mapping::ByPath(
-            crate::config::EntityPathMapping {
-                file_column: "manufacturer id".to_string(),
-                entity_path: "manufacturerId".to_string(),
-            },
-        )];
+        let mapping = vec![Mapping::ByPath(EntityPathMapping {
+            file_column: "manufacturer id".to_string(),
+            entity_path: "manufacturerId".to_string(),
+        })];
         let api_schema = json!({
             "product": {
             }
@@ -90,12 +90,10 @@ mod tests {
     #[test]
     fn validate_non_existent_simple_path() {
         let entity = "product";
-        let mapping = vec![crate::config::Mapping::ByPath(
-            crate::config::EntityPathMapping {
-                file_column: "manufacturer id".to_string(),
-                entity_path: "manufacturerId".to_string(),
-            },
-        )];
+        let mapping = vec![Mapping::ByPath(EntityPathMapping {
+            file_column: "manufacturer id".to_string(),
+            entity_path: "manufacturerId".to_string(),
+        })];
         let api_schema = json!({
             "product": {
             }
@@ -115,12 +113,10 @@ mod tests {
     #[test]
     fn validate_existing_simple_path() {
         let entity = "product";
-        let mapping = vec![crate::config::Mapping::ByPath(
-            crate::config::EntityPathMapping {
-                file_column: "manufacturer id".to_string(),
-                entity_path: "manufacturerId".to_string(),
-            },
-        )];
+        let mapping = vec![Mapping::ByPath(EntityPathMapping {
+            file_column: "manufacturer id".to_string(),
+            entity_path: "manufacturerId".to_string(),
+        })];
         let api_schema = json!({
             "product": {
                 "entity": "product",
@@ -144,12 +140,10 @@ mod tests {
     #[test]
     fn validate_non_existent_association() {
         let entity = "product";
-        let mapping = vec![crate::config::Mapping::ByPath(
-            crate::config::EntityPathMapping {
-                file_column: "manufacturer name".to_string(),
-                entity_path: "manufacturer.name".to_string(),
-            },
-        )];
+        let mapping = vec![Mapping::ByPath(EntityPathMapping {
+            file_column: "manufacturer name".to_string(),
+            entity_path: "manufacturer.name".to_string(),
+        })];
         let api_schema = json!({
             "product": {
                 "entity": "product",
@@ -175,12 +169,10 @@ mod tests {
     #[test]
     fn validate_existing_association() {
         let entity = "product";
-        let mapping = vec![crate::config::Mapping::ByPath(
-            crate::config::EntityPathMapping {
-                file_column: "manufacturer name".to_string(),
-                entity_path: "manufacturer.name".to_string(),
-            },
-        )];
+        let mapping = vec![Mapping::ByPath(EntityPathMapping {
+            file_column: "manufacturer name".to_string(),
+            entity_path: "manufacturer.name".to_string(),
+        })];
         let api_schema = json!({
             "product": {
                 "entity": "product",
@@ -213,12 +205,10 @@ mod tests {
     #[test]
     fn validate_valid_optional_value() {
         let entity = "product";
-        let mapping = vec![crate::config::Mapping::ByPath(
-            crate::config::EntityPathMapping {
-                file_column: "manufacturer name".to_string(),
-                entity_path: "manufacturer?.name".to_string(),
-            },
-        )];
+        let mapping = vec![Mapping::ByPath(EntityPathMapping {
+            file_column: "manufacturer name".to_string(),
+            entity_path: "manufacturer?.name".to_string(),
+        })];
         let api_schema = json!({
             "product": {
                 "entity": "product",
@@ -251,12 +241,10 @@ mod tests {
     #[test]
     fn validate_invalid_optional_value() {
         let entity = "product";
-        let mapping = vec![crate::config::Mapping::ByPath(
-            crate::config::EntityPathMapping {
-                file_column: "manufacturer name".to_string(),
-                entity_path: "manufacturer?.name".to_string(),
-            },
-        )];
+        let mapping = vec![Mapping::ByPath(EntityPathMapping {
+            file_column: "manufacturer name".to_string(),
+            entity_path: "manufacturer?.name".to_string(),
+        })];
         let api_schema = json!({
             "product": {
                 "entity": "product",
@@ -291,12 +279,10 @@ mod tests {
     #[test]
     fn validate_valid_nested_association() {
         let entity = "product";
-        let mapping = vec![crate::config::Mapping::ByPath(
-            crate::config::EntityPathMapping {
-                file_column: "tax country".to_string(),
-                entity_path: "tax.country.name".to_string(),
-            },
-        )];
+        let mapping = vec![Mapping::ByPath(EntityPathMapping {
+            file_column: "tax country".to_string(),
+            entity_path: "tax.country.name".to_string(),
+        })];
         let api_schema = json!({
             "product": {
                 "entity": "product",
