@@ -1,6 +1,7 @@
 use crate::api::SwClient;
 use crate::config::{Credentials, Mapping, Schema};
 use crate::data::{export, import, prepare_scripting_environment, ScriptingEnvironment};
+use crate::data::validate_paths_for_entity;
 use anyhow::Context;
 use clap::{Parser, Subcommand};
 use std::collections::HashSet;
@@ -169,9 +170,11 @@ async fn create_context(
         .context("No .credentials.toml found. Call command auth first.")?;
     let credentials: Credentials = toml::from_str(&serialized_credentials)?;
     let sw_client = SwClient::new(credentials, in_flight_limit).await?;
-    // ToDo: lookup entities.json definitions
 
-    // ToDo: further schema verification
+    let api_schema = sw_client.entity_schema().await;
+    let entity = &schema.entity;
+
+    let _ = validate_paths_for_entity(entity, &schema.mappings, &api_schema?);
 
     // ToDo: create lookup table for languages + currencies?
 
