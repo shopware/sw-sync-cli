@@ -1,3 +1,5 @@
+//! Data structures to build criteria objects for the shopware API
+
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 

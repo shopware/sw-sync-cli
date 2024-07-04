@@ -1,75 +1,19 @@
 use crate::api::SwClient;
-use crate::config::{Credentials, Mapping, Schema};
+use crate::cli::{Cli, Commands, SyncMode};
+use crate::config_file::{Credentials, Mapping, Schema};
 use crate::data::validate_paths_for_entity;
 use crate::data::{export, import, prepare_scripting_environment, ScriptingEnvironment};
 use anyhow::Context;
-use clap::{Parser, Subcommand};
+use clap::Parser;
 use std::collections::HashSet;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Instant;
 
 mod api;
-mod config;
+mod cli;
+mod config_file;
 mod data;
-
-#[derive(Parser)]
-#[command(version, about, long_about = None)]
-struct Cli {
-    #[command(subcommand)]
-    command: Commands,
-}
-
-#[derive(Subcommand)]
-enum Commands {
-    /// Authenticate with a given shopware shop via integration admin API.
-    /// Credentials are stored in .credentials.toml in the current working directory.
-    Auth {
-        /// base URL of the shop
-        #[arg(short, long)]
-        domain: String,
-
-        /// access_key_id
-        #[arg(short, long)]
-        id: String,
-
-        /// access_key_secret
-        #[arg(short, long)]
-        secret: String,
-    },
-
-    /// Import data into shopware or export data to a file
-    Sync {
-        /// Mode (import or export)
-        #[arg(value_enum, short, long)]
-        mode: SyncMode,
-
-        /// Path to profile schema.yaml
-        #[arg(short, long)]
-        schema: PathBuf,
-
-        /// Path to data file
-        #[arg(short, long)]
-        file: PathBuf,
-
-        /// Maximum amount of entities, can be used for debugging
-        #[arg(short, long)]
-        limit: Option<u64>,
-
-        // Verbose output, used for debugging
-        // #[arg(short, long, action = ArgAction::SetTrue)]
-        // verbose: bool,
-        /// How many requests can be "in-flight" at the same time
-        #[arg(short, long, default_value = "8")]
-        in_flight_limit: usize,
-    },
-}
-
-#[derive(Debug, Clone, Copy, clap::ValueEnum)]
-pub enum SyncMode {
-    Import,
-    Export,
-}
 
 #[derive(Debug)]
 pub struct SyncContext {
@@ -109,6 +53,7 @@ async fn main() -> anyhow::Result<()> {
                         .await?;
 
                     println!("Imported successfully");
+                    println!("You might want to run the indexers in your shop now. Go to Settings -> System -> Caches & indexes");
                 }
                 SyncMode::Export => {
                     tokio::task::spawn_blocking(|| async move { export(Arc::new(context)).await })

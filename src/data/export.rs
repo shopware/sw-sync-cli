@@ -1,3 +1,5 @@
+//! Everything related to exporting data out of shopware
+
 use crate::api::filter::Criteria;
 use crate::data::transform::serialize_entity;
 use crate::SyncContext;
@@ -68,6 +70,7 @@ async fn write_to_file(
     csv_writer.write_record(get_header_line(context))?;
 
     for handle in worker_handles {
+        // ToDo: we might want to handle the errors more gracefully here and don't stop on first error
         let (page, rows) = handle.await??;
         println!("writing page {}", page);
 

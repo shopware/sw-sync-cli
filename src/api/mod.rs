@@ -1,7 +1,9 @@
+//! Everything needed for communicating with the Shopware API
+
 pub mod filter;
 
 use crate::api::filter::{Criteria, CriteriaFilter};
-use crate::config::Credentials;
+use crate::config_file::Credentials;
 use anyhow::anyhow;
 use reqwest::header::{HeaderMap, HeaderValue};
 use reqwest::{header, Client, Response, StatusCode};
@@ -98,9 +100,7 @@ impl SwClient {
         Ok(())
     }
 
-    pub async fn entity_schema(
-        &self,
-    ) -> Result<serde_json::Map<String, serde_json::Value>, SwApiError> {
+    pub async fn entity_schema(&self) -> Result<Entity, SwApiError> {
         // ToDo: implement retry on auth fail
         let access_token = self.access_token.lock().unwrap().clone();
         let response = {

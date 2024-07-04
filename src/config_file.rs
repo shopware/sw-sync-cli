@@ -1,3 +1,10 @@
+//! Definitions for the `schema.yaml` and `.credentials.toml` files
+//!
+//! Allows deserialization into a proper typed structure from these files
+//! or also write these typed structures to a file (in case of `.credentials.toml`)
+//!
+//! Utilizes https://serde.rs/
+
 use crate::api::filter::{CriteriaFilter, CriteriaSorting};
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
@@ -12,15 +19,22 @@ pub struct Credentials {
 #[derive(Debug, Deserialize)]
 pub struct Schema {
     pub entity: String,
+
     #[serde(default = "Vec::new")]
     pub filter: Vec<CriteriaFilter>,
+
     #[serde(default = "Vec::new")]
     pub sort: Vec<CriteriaSorting>,
+
+    /// Are unique thanks to `HashSet`
     #[serde(default = "HashSet::new")]
     pub associations: HashSet<String>,
+
     pub mappings: Vec<Mapping>,
+
     #[serde(default = "String::new")]
     pub serialize_script: String,
+
     #[serde(default = "String::new")]
     pub deserialize_script: String,
 }
