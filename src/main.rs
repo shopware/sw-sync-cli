@@ -1,7 +1,7 @@
 use crate::api::SwClient;
 use crate::config::{Credentials, Mapping, Schema};
-use crate::data::{export, import, prepare_scripting_environment, ScriptingEnvironment};
 use crate::data::validate_paths_for_entity;
+use crate::data::{export, import, prepare_scripting_environment, ScriptingEnvironment};
 use anyhow::Context;
 use clap::{Parser, Subcommand};
 use std::collections::HashSet;
@@ -174,7 +174,7 @@ async fn create_context(
     let api_schema = sw_client.entity_schema().await;
     let entity = &schema.entity;
 
-    let _ = validate_paths_for_entity(entity, &schema.mappings, &api_schema?);
+    validate_paths_for_entity(entity, &schema.mappings, &api_schema?)?;
 
     // ToDo: create lookup table for languages + currencies?
 

@@ -45,7 +45,6 @@ impl Mapping {
 pub struct EntityPathMapping {
     pub file_column: String,
     pub entity_path: String,
-    pub field_type: String,
 }
 
 #[derive(Debug, Clone, Deserialize)]
