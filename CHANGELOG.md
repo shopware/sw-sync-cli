@@ -1,5 +1,8 @@
 # NEXT-RELEASE
 
+# v0.6.0
+- Added schema / profile validation to ensure the entities + `entity_path` exists in the shop
+
 # v0.5.0
 - Added `get_default(name)` function to scripting. It allows lookup of constants like the `Shopware/src/Core/Defaults.php`
 - Fixed import of "To-Many-Associations" when the value is null it will be ignored instead of added to the entity
