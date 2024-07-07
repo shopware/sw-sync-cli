@@ -52,7 +52,7 @@ pub enum Commands {
         // #[arg(short, long, action = ArgAction::SetTrue)]
         // verbose: bool,
         /// How many requests can be "in-flight" at the same time
-        #[arg(short, long, default_value = "8")]
+        #[arg(short, long, default_value = "10")]
         in_flight_limit: usize,
     },
 }

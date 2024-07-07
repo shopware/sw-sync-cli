@@ -26,10 +26,12 @@ pub fn deserialize_row(
                 let column_index = headers
                     .iter()
                     .position(|header| header == path_mapping.file_column)
-                    .context(format!(
-                        "Can't find column '{}' in CSV headers",
-                        path_mapping.file_column
-                    ))?;
+                    .with_context(|| {
+                        format!(
+                            "Can't find column '{}' in CSV headers",
+                            path_mapping.file_column
+                        )
+                    })?;
 
                 let raw_value = row
                     .get(column_index)
@@ -56,10 +58,10 @@ pub fn serialize_entity(entity: Entity, context: &SyncContext) -> anyhow::Result
         match mapping {
             Mapping::ByPath(path_mapping) => {
                 let value = entity.get_by_path(&path_mapping.entity_path)
-                    .context(format!(
+                    .with_context(|| format!(
                         "could not get field path '{}' specified in mapping (you might try the optional chaining operator '?.' to fallback to null), entity attributes:\n{}",
                         path_mapping.entity_path,
-                        serde_json::to_string_pretty(&entity).unwrap())
+                        serde_json::to_string_pretty(&entity).unwrap()) // expensive for big entities
                     )?;
 
                 let value_str = match value {
@@ -72,10 +74,12 @@ pub fn serialize_entity(entity: Entity, context: &SyncContext) -> anyhow::Result
             Mapping::ByScript(script_mapping) => {
                 let value = script_row
                     .get(script_mapping.key.as_str())
-                    .context(format!(
-                        "failed to retrieve script key '{}' of row",
-                        script_mapping.key
-                    ))?;
+                    .with_context(|| {
+                        format!(
+                            "failed to retrieve script key '{}' of row",
+                            script_mapping.key
+                        )
+                    })?;
                 let value_str = serde_json::to_string(value)?;
 
                 row.push(value_str);

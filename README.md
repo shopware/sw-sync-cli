@@ -21,14 +21,23 @@ to export data into (CSV) files or import data from (CSV) files.
 ## Installation
 
 ### With Cargo ([Rust toolchain](https://www.rust-lang.org/learn/get-started))
+
 ```bash
 cargo install sw-sync-cli
 ```
 Same command can be used for updates. See [crate](https://crates.io/crates/sw-sync-cli)
 
 ### Manual
+
 head to [GitHub releases](https://github.com/MalteJanz/sw-sync-cli/releases) and download the right binary for your operating system.
 Then either execute the binary directly or put it in your `PATH`.
+
+### Build it from this repository
+
+1. Clone this repository
+2. Have the latest [Rust toolchain](https://www.rust-lang.org/learn/get-started) installed
+3. Run `cargo build --release` inside the repository root folder
+4. You will get your executable here `./target/release/sw-sync-cli`
 
 ## Usage
 

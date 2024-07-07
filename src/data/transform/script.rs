@@ -6,7 +6,7 @@ use crate::SyncContext;
 use anyhow::Context;
 use csv::StringRecord;
 use rhai::packages::{BasicArrayPackage, CorePackage, MoreStringPackage, Package};
-use rhai::{Engine, Position, Scope, AST};
+use rhai::{Engine, OptimizationLevel, Position, Scope, AST};
 
 #[derive(Debug)]
 pub struct ScriptingEnvironment {
@@ -37,10 +37,9 @@ impl ScriptingEnvironment {
             let column_index = headers
                 .iter()
                 .position(|h| h == mapping.file_column)
-                .context(format!(
-                    "Can't find column '{}' in CSV headers",
-                    mapping.file_column
-                ))?;
+                .with_context(|| {
+                    format!("Can't find column '{}' in CSV headers", mapping.file_column)
+                })?;
 
             let value = row
                 .get(column_index)
@@ -78,7 +77,11 @@ impl ScriptingEnvironment {
         };
 
         let mut scope = Scope::new();
+
+        // this is potentially expensive for big entities!
+        // we might only want to pass some data into the script...
         let script_entity = rhai::serde::to_dynamic(entity)?;
+
         scope.push_dynamic("entity", script_entity);
         let row_dynamic = rhai::Map::new();
         scope.push("row", row_dynamic);
@@ -124,6 +127,8 @@ pub fn prepare_scripting_environment(
 
 fn get_base_engine() -> Engine {
     let mut engine = Engine::new_raw();
+    engine.set_optimization_level(OptimizationLevel::Full);
+
     // Default print/debug implementations
     engine.on_print(|text| println!("{text}"));
     engine.on_debug(|text, source, pos| match (source, pos) {

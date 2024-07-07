@@ -248,12 +248,12 @@ impl SwClient {
     }
 
     async fn deserialize<T: for<'a> Deserialize<'a>>(response: Response) -> Result<T, SwApiError> {
-        let text = response.text().await?;
+        let bytes = response.bytes().await?;
 
-        match serde_json::from_str(&text) {
+        match serde_json::from_slice(&bytes) {
             Ok(t) => Ok(t),
             Err(_e) => {
-                let body: serde_json::Value = serde_json::from_str(&text)?;
+                let body: serde_json::Value = serde_json::from_slice(&bytes)?;
                 Err(SwApiError::DeserializeIntoSchema(
                     serde_json::to_string_pretty(&body)?,
                 ))
