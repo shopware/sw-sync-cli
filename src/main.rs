@@ -28,6 +28,8 @@ pub struct SyncContext {
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    // console_subscriber::init(); // Profiling
+
     let start_instant = Instant::now();
     let cli = Cli::parse();
 
@@ -48,9 +50,7 @@ async fn main() -> anyhow::Result<()> {
 
             match mode {
                 SyncMode::Import => {
-                    tokio::task::spawn_blocking(|| async move { import(Arc::new(context)).await })
-                        .await?
-                        .await?;
+                    import(Arc::new(context)).await?;
 
                     println!("Imported successfully");
                     println!("You might want to run the indexers in your shop now. Go to Settings -> System -> Caches & indexes");

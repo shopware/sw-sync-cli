@@ -9,6 +9,7 @@ use reqwest::header::{HeaderMap, HeaderValue};
 use reqwest::{header, Client, Response, StatusCode};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
+use std::fmt::Debug;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 use thiserror::Error;
@@ -55,17 +56,11 @@ impl SwClient {
         payload: &[T],
     ) -> Result<(), SwApiError> {
         let entity: String = entity.into();
-        println!(
-            "sync {:?} '{}' with payload size {}",
-            action,
-            &entity,
-            payload.len()
-        );
         // ToDo: implement retry on auth fail
         let access_token = self.access_token.lock().unwrap().clone();
         let body = SyncBody {
             write_data: SyncOperation {
-                entity,
+                entity: entity.clone(),
                 action,
                 payload,
             },
@@ -74,6 +69,12 @@ impl SwClient {
         let response = {
             let _lock = self.in_flight_semaphore.acquire().await.unwrap();
             let start_instant = Instant::now();
+            println!(
+                "sync {:?} '{}' with payload size {}",
+                action,
+                &entity,
+                payload.len()
+            );
             let res = self
                 .client
                 .post(format!("{}/api/_action/sync", self.credentials.base_url))
@@ -190,6 +191,10 @@ impl SwClient {
         let response = {
             let _lock = self.in_flight_semaphore.acquire().await.unwrap();
             let start_instant = Instant::now();
+            println!(
+                "fetching page {} of '{}' with limit {}",
+                criteria.page, entity, criteria.limit
+            );
             let res = self
                 .client
                 .post(format!(
@@ -234,7 +239,7 @@ impl SwClient {
 
         if !response.status().is_success() {
             let status = response.status();
-            let body: serde_json::Value = response.json().await?;
+            let body: serde_json::Value = Self::deserialize(response).await?;
             return Err(anyhow!(
                 "Failed to authenticate, got {} with body:\n{}",
                 status,
@@ -247,18 +252,27 @@ impl SwClient {
         Ok(res)
     }
 
-    async fn deserialize<T: for<'a> Deserialize<'a>>(response: Response) -> Result<T, SwApiError> {
+    async fn deserialize<T>(response: Response) -> Result<T, SwApiError>
+    where
+        T: for<'a> Deserialize<'a> + Debug + Send + 'static,
+    {
         let bytes = response.bytes().await?;
 
-        match serde_json::from_slice(&bytes) {
-            Ok(t) => Ok(t),
-            Err(_e) => {
-                let body: serde_json::Value = serde_json::from_slice(&bytes)?;
-                Err(SwApiError::DeserializeIntoSchema(
-                    serde_json::to_string_pretty(&body)?,
-                ))
-            }
-        }
+        let (worker_tx, worker_rx) = tokio::sync::oneshot::channel::<Result<T, SwApiError>>();
+        rayon::spawn(move || {
+            // expensive for lage json objects
+            let result = match serde_json::from_slice(&bytes) {
+                Ok(t) => Ok(t),
+                Err(_e) => {
+                    let body: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+                    Err(SwApiError::DeserializeIntoSchema(
+                        serde_json::to_string_pretty(&body).unwrap(),
+                    ))
+                }
+            };
+            worker_tx.send(result).unwrap();
+        });
+        worker_rx.await.unwrap()
     }
 }
 
