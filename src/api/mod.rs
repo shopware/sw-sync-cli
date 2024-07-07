@@ -31,6 +31,9 @@ impl SwClient {
         // and that doesn't have the association data as part of the entity object
         default_headers.insert(header::ACCEPT, HeaderValue::from_static("application/json"));
         let client = Client::builder()
+            // workaround for long-running requests,
+            // see https://github.com/hyperium/hyper/issues/2312#issuecomment-1411360500
+            .pool_max_idle_per_host(0)
             .timeout(Duration::from_secs(15))
             .default_headers(default_headers)
             .build()?;
