@@ -22,14 +22,13 @@ pub struct SyncContext {
     /// specifies the input or output file
     pub file: PathBuf,
     pub limit: Option<u64>,
+    pub in_flight_limit: usize,
     pub scripting_environment: ScriptingEnvironment,
     pub associations: HashSet<String>,
 }
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    // console_subscriber::init(); // Profiling
-
     let start_instant = Instant::now();
     let cli = Cli::parse();
 
@@ -50,15 +49,13 @@ async fn main() -> anyhow::Result<()> {
 
             match mode {
                 SyncMode::Import => {
-                    import(Arc::new(context)).await?;
+                    tokio::task::spawn_blocking(move || import(Arc::new(context))).await??;
 
                     println!("Imported successfully");
                     println!("You might want to run the indexers in your shop now. Go to Settings -> System -> Caches & indexes");
                 }
                 SyncMode::Export => {
-                    tokio::task::spawn_blocking(|| async move { export(Arc::new(context)).await })
-                        .await?
-                        .await?;
+                    export(Arc::new(context)).await?;
 
                     println!("Exported successfully");
                 }
@@ -132,6 +129,7 @@ async fn create_context(
         scripting_environment,
         file,
         limit,
+        in_flight_limit,
         associations,
     })
 }

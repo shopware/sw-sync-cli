@@ -261,6 +261,8 @@ impl SwClient {
     {
         let bytes = response.bytes().await?;
 
+        // offload heavy deserialization (shopware json responses can get big) to worker thread
+        // to not block this thread for too long doing async work
         let (worker_tx, worker_rx) = tokio::sync::oneshot::channel::<Result<T, SwApiError>>();
         rayon::spawn(move || {
             // expensive for lage json objects

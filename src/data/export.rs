@@ -44,7 +44,8 @@ pub async fn export(context: Arc<SyncContext>) -> anyhow::Result<()> {
         request_tasks.push(tokio::spawn(async move {
             let response = send_request(page, chunk_limit, &context).await?;
 
-            // move processing to worker thread pool
+            // move actual response processing / deserialization to worker thread pool
+            // and wait for it to finish
             let (worker_tx, worker_rx) =
                 tokio::sync::oneshot::channel::<anyhow::Result<(u64, Vec<Vec<String>>)>>();
             rayon::spawn(move || {
@@ -55,7 +56,7 @@ pub async fn export(context: Arc<SyncContext>) -> anyhow::Result<()> {
         }));
     }
 
-    // wait for all tasks to finish
+    // wait for all tasks to finish, one after the other, in order,
     // and write them to the target file (blocking IO)
     tokio::task::spawn_blocking(|| async move { write_to_file(request_tasks, &context).await })
         .await?
