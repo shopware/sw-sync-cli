@@ -1,5 +1,9 @@
 # NEXT-RELEASE
 
+# v0.7.0
+- Fixed bug which caused much worse response times that happened sometimes during concurrent requests
+- Slightly improved the performance and refactored much of the main processing logic to better utilize CPU cores
+
 # v0.6.0
 - Added schema / profile validation to ensure the entities + `entity_path` exists in the shop
 
