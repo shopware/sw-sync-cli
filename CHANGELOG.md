@@ -1,5 +1,8 @@
 # NEXT-RELEASE
 
+# v0.7.1
+- Moved repository to shopware organization
+
 # v0.7.0
 - Fixed bug which caused much worse response times that happened sometimes during concurrent requests
 - Slightly improved the performance and refactored much of the main processing logic to better utilize CPU cores
