@@ -10,7 +10,7 @@ repository = "https://github.com/shopware/sw-sync-cli"
 license = "MIT"
 
 [dependencies]
-clap = { version = "4.5.8", features = ["derive"] }
+clap = { version = "4.5.9", features = ["derive"] }
 tokio = { version = "1.38.0", features = ["full"] }
 rayon = "1.10.0"
 reqwest = { version = "0.12.5", features = ["json"] }
