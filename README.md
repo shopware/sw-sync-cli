@@ -1,7 +1,7 @@
 # sw-sync-cli
 
 > [!WARNING]  
-> This tool is experimental and for now just a prototype.
+> This tool is experimental and for now just a proof of concept.
 
 A CLI tool that communicates with the 
 [Shopware admin API](https://shopware.stoplight.io/docs/admin-api)
@@ -29,7 +29,7 @@ Same command can be used for updates. See [crate](https://crates.io/crates/sw-sy
 
 ### Manual
 
-head to [GitHub releases](https://github.com/MalteJanz/sw-sync-cli/releases) and download the right binary for your operating system.
+head to [GitHub releases](https://github.com/shopware/sw-sync-cli/releases) and download the right binary for your operating system.
 Then either execute the binary directly or put it in your `PATH`.
 
 ### Build it from this repository
@@ -55,7 +55,7 @@ Then either execute the binary directly or put it in your `PATH`.
 
 ### Profiles (sync schema)
 
-To get started take a look at [Profiles in this repository](https://github.com/MalteJanz/sw-sync-cli/tree/main/profiles).
+To get started take a look at [Profiles in this repository](https://github.com/shopware/sw-sync-cli/tree/main/profiles).
 The structure of a profile (sync schema) `.yaml` is as follows:
 
 ```yaml
