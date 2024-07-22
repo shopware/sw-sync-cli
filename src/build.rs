@@ -25,8 +25,7 @@ fn main() {
 
         profiles_content.push_str(&format!(
             "    (\"{}\", include_bytes!(concat!(env!(\"OUT_DIR\"), \"/profiles/{}\"))),\n",
-            file_name,
-            file_name
+            file_name, file_name
         ));
     }
 

@@ -23,7 +23,9 @@ pub enum Commands {
 
     /// Copy all default profiles to current folder
     CopyProfiles {
-        // TODO: Add a flag to define the target path/folder
+        /// Output path
+        #[arg(short, long)]
+        path: Option<PathBuf>,
 
         /// Overwrite existing profiles
         #[arg(short, long)]
