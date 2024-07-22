@@ -3,7 +3,6 @@ use crate::cli::{Cli, Commands, SyncMode};
 use crate::config_file::{Credentials, Mapping, Schema};
 use crate::data::validate_paths_for_entity;
 use crate::data::{export, import, prepare_scripting_environment, ScriptingEnvironment};
-use data::{copy_profiles, include_profiles_in_binary};
 use anyhow::Context;
 use clap::Parser;
 use std::collections::HashSet;
@@ -15,6 +14,8 @@ mod api;
 mod cli;
 mod config_file;
 mod data;
+
+include!(concat!(env!("OUT_DIR"), "/profiles.rs"));
 
 #[derive(Debug)]
 pub struct SyncContext {
@@ -30,8 +31,6 @@ pub struct SyncContext {
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    include_profiles_in_binary();
-
     let start_instant = Instant::now();
     let cli = Cli::parse();
 
@@ -97,6 +96,24 @@ async fn index(skip: Vec<String>) -> anyhow::Result<()> {
     sw_client.index(skip).await?;
 
     Ok(())
+}
+
+pub fn copy_profiles(force: bool, list: bool) {
+    for (name, content) in PROFILES {
+        if list {
+            println!("Profile: {}", name);
+        }
+
+        // TODO: normal mode
+
+        // TODO: force mode
+
+        if force {
+            let dest_path = format!("./output/{}", name);
+            std::fs::create_dir_all("./output").unwrap(); // Ensure the output directory exists
+            std::fs::write(dest_path, content).unwrap();
+        }
+    }
 }
 
 async fn auth(domain: String, id: String, secret: String) -> anyhow::Result<()> {
