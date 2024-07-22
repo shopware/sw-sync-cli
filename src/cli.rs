@@ -21,6 +21,19 @@ pub enum Commands {
         skip: Vec<String>,
     },
 
+    /// Copy all default profiles to current folder
+    CopyProfiles {
+        // TODO: Add a flag to define the target path/folder
+
+        /// Overwrite existing profiles
+        #[arg(short, long)]
+        force: bool,
+
+        /// List all available profiles
+        #[arg(short, long)]
+        list: bool,
+    },
+
     /// Authenticate with a given shopware shop via integration admin API.
     /// Credentials are stored in .credentials.toml in the current working directory.
     Auth {

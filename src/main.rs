@@ -3,6 +3,7 @@ use crate::cli::{Cli, Commands, SyncMode};
 use crate::config_file::{Credentials, Mapping, Schema};
 use crate::data::validate_paths_for_entity;
 use crate::data::{export, import, prepare_scripting_environment, ScriptingEnvironment};
+use data::{copy_profiles, include_profiles_in_binary};
 use anyhow::Context;
 use clap::Parser;
 use std::collections::HashSet;
@@ -29,6 +30,8 @@ pub struct SyncContext {
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    include_profiles_in_binary();
+
     let start_instant = Instant::now();
     let cli = Cli::parse();
 
@@ -36,6 +39,12 @@ async fn main() -> anyhow::Result<()> {
         Commands::Index { skip } => {
             index(skip).await?;
             println!("Successfully triggered indexing.");
+        }
+        Commands::CopyProfiles { force, list } => {
+            copy_profiles(force, list);
+
+            // TODO: add actual path to folder of profiles
+            println!("Successfully copied profiles.")
         }
         Commands::Auth { domain, id, secret } => {
             auth(domain, id, secret).await?;
