@@ -14,6 +14,13 @@ pub struct Cli {
 
 #[derive(Subcommand)]
 pub enum Commands {
+    /// Trigger indexing of all registered indexer in shopware asynchronously.
+    Index {
+        // Array of indexer names to be skipped
+        #[arg(short, long)]
+        skip: Vec<String>,
+    },
+
     /// Authenticate with a given shopware shop via integration admin API.
     /// Credentials are stored in .credentials.toml in the current working directory.
     Auth {

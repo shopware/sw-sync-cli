@@ -33,6 +33,10 @@ async fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
 
     match cli.command {
+        Commands::Index { skip } => {
+            index(skip).await?;
+            println!("Successfully triggered indexing.");
+        }
         Commands::Auth { domain, id, secret } => {
             auth(domain, id, secret).await?;
             println!("Successfully authenticated. You can continue with other commands now.")
@@ -67,6 +71,16 @@ async fn main() -> anyhow::Result<()> {
         "This whole command executed in {:.3}s",
         start_instant.elapsed().as_secs_f32()
     );
+
+    Ok(())
+}
+
+async fn index(skip: Vec<String>) -> anyhow::Result<()> {
+    let credentials = Credentials::read_credentials().await?;
+
+    // TODO: change in flight limit handling? Hardcoded default value?
+    let sw_client = SwClient::new(credentials, 8).await?;
+    sw_client.index(skip).await?;
 
     Ok(())
 }
@@ -107,10 +121,7 @@ async fn create_context(
         }
     }
 
-    let serialized_credentials = tokio::fs::read_to_string("./.credentials.toml")
-        .await
-        .context("No .credentials.toml found. Call command auth first.")?;
-    let credentials: Credentials = toml::from_str(&serialized_credentials)?;
+    let credentials = Credentials::read_credentials().await?;
     let sw_client = SwClient::new(credentials, in_flight_limit).await?;
 
     let api_schema = sw_client.entity_schema().await;

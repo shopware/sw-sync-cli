@@ -6,6 +6,7 @@
 //! Utilizes https://serde.rs/
 
 use crate::api::filter::{CriteriaFilter, CriteriaSorting};
+use anyhow::Context;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 
@@ -14,6 +15,17 @@ pub struct Credentials {
     pub base_url: String,
     pub access_key_id: String,
     pub access_key_secret: String,
+}
+
+impl Credentials {
+    pub async fn read_credentials() -> anyhow::Result<Credentials> {
+        let serialized_credentials = tokio::fs::read_to_string("./.credentials.toml")
+            .await
+            .context("No .credentials.toml found. Call command auth first.")?;
+
+        let credentials: Credentials = toml::from_str(&serialized_credentials)?;
+        Ok(credentials)
+    }
 }
 
 #[derive(Debug, Deserialize)]
