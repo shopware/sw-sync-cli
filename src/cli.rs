@@ -55,6 +55,10 @@ pub enum Commands {
         #[arg(short, long)]
         limit: Option<u64>,
 
+        // Disable triggering indexer after sync ended successfully
+        #[arg(value_enum, short, long, default_value = "false")]
+        disable_index: bool,
+
         // Verbose output, used for debugging
         // #[arg(short, long, action = ArgAction::SetTrue)]
         // verbose: bool,

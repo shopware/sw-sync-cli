@@ -46,6 +46,7 @@ async fn main() -> anyhow::Result<()> {
             schema,
             file,
             limit,
+            disable_index,
             // verbose,
             in_flight_limit,
         } => {
@@ -63,6 +64,11 @@ async fn main() -> anyhow::Result<()> {
 
                     println!("Exported successfully");
                 }
+            }
+
+            if !disable_index {
+                index(vec![]).await?;
+                println!("Successfully triggered indexing.");
             }
         }
     }
