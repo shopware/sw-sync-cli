@@ -1,12 +1,18 @@
 # sw-sync-cli
 
+A CLI tool that communicates with the [Shopware admin API](https://shopware.stoplight.io/docs/admin-api) (over an [integration](https://docs.shopware.com/en/shopware-6-en/settings/system/integrationen?category=shopware-6-en/settings/system)) to export data into (CSV) files or import data from (CSV) files.
+
+---
+
 > [!WARNING]  
 > This tool is experimental and for now just a proof of concept.
 
-A CLI tool that communicates with the 
-[Shopware admin API](https://shopware.stoplight.io/docs/admin-api)
-(over an [integration](https://docs.shopware.com/en/shopware-6-en/settings/system/integrationen?category=shopware-6-en/settings/system))
-to export data into (CSV) files or import data from (CSV) files.
+## Overview
+
+- [Features](https://github.com/shopware/sw-sync-cli#features)
+- [Installation](https://github.com/shopware/sw-sync-cli#installation)
+- [Usage](https://github.com/shopware/sw-sync-cli#usage)
+- [License](https://github.com/shopware/sw-sync-cli#license)
 
 ## Features
 
@@ -20,19 +26,20 @@ to export data into (CSV) files or import data from (CSV) files.
 
 ## Installation
 
-### With Cargo ([Rust toolchain](https://www.rust-lang.org/learn/get-started))
+#### With Cargo ([Rust toolchain](https://www.rust-lang.org/learn/get-started))
 
 ```bash
 cargo install sw-sync-cli
 ```
+
 Same command can be used for updates. See [crate](https://crates.io/crates/sw-sync-cli)
 
-### Manual
+#### Manual
 
 head to [GitHub releases](https://github.com/shopware/sw-sync-cli/releases) and download the right binary for your operating system.
 Then either execute the binary directly or put it in your `PATH`.
 
-### Build it from this repository
+#### Build it from this repository
 
 1. Clone this repository
 2. Have the latest [Rust toolchain](https://www.rust-lang.org/learn/get-started) installed
@@ -53,7 +60,7 @@ Then either execute the binary directly or put it in your `PATH`.
 > [!Note]  
 > You can call `sw-sync-cli help` at any time to get more information
 
-### Profiles (sync schema)
+#### Profiles (sync schema)
 
 To get started take a look at [Profiles in this repository](https://github.com/shopware/sw-sync-cli/tree/main/profiles).
 The structure of a profile (sync schema) `.yaml` is as follows:
@@ -115,11 +122,11 @@ serialize_script: |
   // you receive an entity object, which consists of the whole entity API response for that single entity
   // you also receive an empty row object where the specified keys above are missing (you need to set them)
   // the other simple mappings are executed (added to the row object) after this script
-  
+
   // debugging utils
   // debug(entity); // contains the full entity object from the API (can be huge!)
   // print(row); // will be empty
-  
+
   // Use 'get_default' to look up a value equivalent to Defaults.php
   let default_currency = get_default("CURRENCY");
   let price = entity.price.find(|p| p.currencyId == default_currency);
@@ -132,10 +139,10 @@ deserialize_script: |
   // you receive 'row' as an object that has all the keys defined above with the corresponding value
   // you also receive an empty entity object, where you need to resolve your keys
   // the other simple mappings are executed (added to the entity object) after this script
-  
+
   // print(entity); // will be empty
   // debug(row); // will contain only the specified keys + their values
-  
+
   entity.price = [];
   entity.price.push(#{
     gross: row.gross_price_eur,
@@ -144,3 +151,8 @@ deserialize_script: |
     currencyId: get_default("CURRENCY"),
   });
 ```
+
+## License
+
+`sw-sync-cli` is distributed under the terms of the MIT License.  
+See the [LICENSE](./LICENSE) file for details.
