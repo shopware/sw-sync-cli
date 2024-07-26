@@ -13,22 +13,59 @@ use std::path::Path;
 
 pub const DEFAULT_PROFILES: &[(&str, &str)] = &[
     (
-        "manufacturer.yaml",
-        include_str!("../profiles/manufacturer.yaml"),
+        "default_advanced_price.yaml",
+        include_str!("../profiles/default_advanced_price.yaml"),
     ),
     (
-        "product_required.yaml",
-        include_str!("../profiles/product_required.yaml"),
+        "default_category.yaml",
+        include_str!("../profiles/default_category.yaml"),
     ),
     (
-        "product_variants.yaml",
-        include_str!("../profiles/product_variants.yaml"),
+        "default_cross_selling.yaml",
+        include_str!("../profiles/default_cross_selling.yaml"),
     ),
     (
-        "product_with_manufacturer.yaml",
-        include_str!("../profiles/product_with_manufacturer.yaml"),
+        "default_customer.yaml",
+        include_str!("../profiles/default_customer.yaml"),
+    ),
+    (
+        "default_media.yaml",
+        include_str!("../profiles/default_media.yaml"),
+    ),
+    (
+        "default_newsletter_recipient.yaml",
+        include_str!("../profiles/default_newsletter_recipient.yaml"),
+    ),
+    (
+        "default_order.yaml",
+        include_str!("../profiles/default_order.yaml"),
+    ),
+    (
+        "default_product.yaml",
+        include_str!("../profiles/default_product.yaml"),
+    ),
+    (
+        "default_product_variants.yaml",
+        include_str!("../profiles/default_product_variants.yaml"),
+    ),
+    (
+        "default_promotion_code.yaml",
+        include_str!("../profiles/default_promotion_code.yaml"),
+    ),
+    (
+        "default_promotion_discount.yaml",
+        include_str!("../profiles/default_promotion_discount.yaml"),
+    ),
+    (
+        "default_property.yaml",
+        include_str!("../profiles/default_property.yaml"),
+    ),
+    (
+        "default_variant_configuration.yaml",
+        include_str!("../profiles/default_variant_configuration.yaml"),
     ),
 ];
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Credentials {
     pub base_url: String,

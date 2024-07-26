@@ -1,0 +1,130 @@
+entity: customer
+
+mappings:
+  - file_column: "id"
+    entity_path: "id"
+  - file_column: "salutation id"
+    entity_path: "salutationId"
+  - file_column: "language id"
+    entity_path: "languageId"
+  - file_column: "sales channel id"
+    entity_path: "salesChannel?.id"
+  - file_column: "customer group id"
+    entity_path: "group?.id"
+  - file_column: "default payment method id"
+    entity_path: "defaultPaymentMethod?.id"
+  - file_column: "account type"
+    entity_path: "accountType"
+  - file_column: "customer number"
+    key: "customer_number"
+  - file_column: "first name"
+    entity_path: "firstName"
+  - file_column: "last name"
+    entity_path: "lastName"
+  - file_column: "email"
+    entity_path: "email"
+  - file_column: "active"
+    entity_path: "active"
+  - file_column: "company"
+    entity_path: "company"
+  - file_column: "title"
+    entity_path: "title"
+  - file_column: "guest"
+    entity_path: "guest"
+  - file_column: "first login date"
+    entity_path: "firstLogin"
+  - file_column: "last login date"
+    entity_path: "lastLogin"
+  - file_column: "birthday"
+    entity_path: "birthday"
+  - file_column: "default billing address id"
+    entity_path: "defaultBillingAddress?.id"
+  - file_column: "default billing address salutation id"
+    entity_path: "defaultBillingAddress.salutationId"
+  - file_column: "default billing address title"
+    entity_path: "defaultBillingAddress?.title"
+  - file_column: "default billing address first name"
+    entity_path: "defaultBillingAddress?.firstName"
+  - file_column: "default billing address last name"
+    entity_path: "defaultBillingAddress?.lastName"
+  - file_column: "default billing address company"
+    entity_path: "defaultBillingAddress?.company"
+  - file_column: "default billing address street"
+    entity_path: "defaultBillingAddress?.street"
+  - file_column: "default billing address zip code"
+    key: "default_billing_address_zip_code"
+  - file_column: "default billing address city"
+    entity_path: "defaultBillingAddress?.city"
+  - file_column: "default billing address country id"
+    entity_path: "defaultBillingAddress.countryId"
+  - file_column: "default billing address phone number"
+    entity_path: "defaultBillingAddress?.phoneNumber"
+  - file_column: "default shipping address id"
+    entity_path: "defaultShippingAddress?.id"
+  - file_column: "default shipping address salutation id"
+    entity_path: "defaultShippingAddress.salutationId"
+  - file_column: "default shipping address title"
+    entity_path: "defaultShippingAddress?.title"
+  - file_column: "default shipping address first name"
+    entity_path: "defaultShippingAddress?.firstName"
+  - file_column: "default shipping address last name"
+    entity_path: "defaultShippingAddress?.lastName"
+  - file_column: "default shipping address company"
+    entity_path: "defaultShippingAddress?.company"
+  - file_column: "default shipping address street"
+    entity_path: "defaultShippingAddress?.street"
+  - file_column: "default shipping address zip code"
+    key: "default_shipping_address_zip_code"
+  - file_column: "default shipping address city"
+    entity_path: "defaultShippingAddress?.city"
+  - file_column: "default shipping address country id"
+    entity_path: "defaultShippingAddress.countryId"
+  - file_column: "default shipping address phone number"
+    entity_path: "defaultShippingAddress?.phoneNumber"
+  - file_column: "default sales channel name"
+    key: "default_sales_channel_name"
+  - file_column: "default group name"
+    key: "default_group_name"
+  - file_column: "default payment method name"
+    key: "default_payment_method_name"
+
+serialize_script: |
+  row = #{
+    customer_number: entity.customerNumber,
+    default_billing_address_zip_code: entity.defaultBillingAddress?.zipCode,
+    default_shipping_address_zip_code: entity.defaultShippingAddress?.zipCode,
+    default_group_name: entity.group.translated?.name,
+    default_sales_channel_name: entity.salesChannel.translated?.name,
+    default_payment_method_name: entity.defaultPaymentMethod.translated?.name
+  };
+
+deserialize_script: |
+  let default_language = get_default("LANGUAGE_SYSTEM");
+
+  entity = #{
+    customerNumber: `${row.customer_number}`, // TODO: fix conversion (NEXT-37536)
+    defaultBillingAddress: #{
+      zipCode: `${row.default_billing_address_zip_code}`, // TODO: fix conversion (NEXT-37536)
+    },
+    defaultShippingAddress: #{
+      zipCode: `${row.default_shipping_address_zip_code}`, // TODO: fix conversion (NEXT-37536)
+    },
+    group: #{
+      translations: [#{
+        languageId: default_language,
+        name: row.default_group_name,
+      }]
+    },
+    salesChannel: #{
+      translations: [#{
+        languageId: default_language,
+        name: row.default_sales_channel_name,
+      }]
+    },
+    defaultPaymentMethod: #{
+      translations: [#{
+        languageId: default_language,
+        name: row.default_payment_method_name,
+      }]
+    }
+  };

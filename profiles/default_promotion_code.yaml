@@ -1,0 +1,9 @@
+entity: promotion_individual_code
+
+mappings:
+  - file_column: "id"
+    entity_path: "id"
+  - file_column: "promotion id"
+    entity_path: "promotionId"
+  - file_column: "code"
+    entity_path: "code"

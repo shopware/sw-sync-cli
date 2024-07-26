@@ -1,12 +1,13 @@
 # NEXT-RELEASE
 
+- NEXT-37317 - Added various default profiles
 - NEXT-37504 - Fixed the generation of request criteria to support correct nested associations
 - NEXT-37318 - Added `copy-profile` command, to copy the default profiles to your system
 - NEXT-37316 - Added `index` command, to trigger the indexing of the Shopware shop
 - NEXT-37315 - Trigger indexing of the shop by default at the end of an import (can be disabled with flag `-d` `--disable-index`)
 - NEXT-37303 - [BREAKING] changed `sync` command argument `--schema` `-s` to `--profile` `-p`
-- NEXT-37303 - [BREAKING] Fixed an issue where `row` values were always provided as strings in the deserialize script. 
-               Now they are converted into their proper types before passed to the script.
+- NEXT-37303 - [BREAKING] Fixed an issue where `row` values were always provided as strings in the deserialize script.
+  Now they are converted into their proper types before passed to the script.
 
 # v0.7.1
 
