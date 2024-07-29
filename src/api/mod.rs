@@ -25,6 +25,8 @@ pub struct SwClient {
 }
 
 impl SwClient {
+    pub const DEFAULT_IN_FLIGHT: usize = 8;
+
     pub async fn new(credentials: Credentials, in_flight_limit: usize) -> anyhow::Result<Self> {
         let mut default_headers = HeaderMap::default();
         // This header is needed, otherwise the response would be "application/vnd.api+json" (by default)
@@ -255,6 +257,26 @@ impl SwClient {
         Ok(res)
     }
 
+    pub async fn index(&self, skip: Vec<String>) -> anyhow::Result<()> {
+        let access_token = self.access_token.lock().unwrap().clone();
+
+        let response = self
+            .client
+            .post(format!("{}/api/_action/index", self.credentials.base_url))
+            .bearer_auth(access_token)
+            .json(&IndexBody { skip })
+            .send()
+            .await?;
+
+        if !response.status().is_success() {
+            let status = response.status();
+            let body: SwErrorBody = Self::deserialize(response).await?;
+            return Err(SwApiError::Server(status, body).into());
+        }
+
+        Ok(())
+    }
+
     async fn deserialize<T>(response: Response) -> Result<T, SwApiError>
     where
         T: for<'a> Deserialize<'a> + Debug + Send + 'static,
@@ -279,6 +301,11 @@ impl SwClient {
         });
         worker_rx.await.unwrap()
     }
+}
+
+#[derive(Debug, Serialize)]
+struct IndexBody {
+    skip: Vec<String>,
 }
 
 #[derive(Debug, Serialize)]

@@ -33,6 +33,10 @@ async fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
 
     match cli.command {
+        Commands::Index { skip } => {
+            index(skip).await?;
+            println!("Successfully triggered indexing.");
+        }
         Commands::Auth { domain, id, secret } => {
             auth(domain, id, secret).await?;
             println!("Successfully authenticated. You can continue with other commands now.")
@@ -71,6 +75,15 @@ async fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
+async fn index(skip: Vec<String>) -> anyhow::Result<()> {
+    let credentials = Credentials::read_credentials().await?;
+
+    let sw_client = SwClient::new(credentials, SwClient::DEFAULT_IN_FLIGHT).await?;
+    sw_client.index(skip).await?;
+
+    Ok(())
+}
+
 async fn auth(domain: String, id: String, secret: String) -> anyhow::Result<()> {
     let credentials = Credentials {
         base_url: domain.trim_end_matches('/').to_string(),
@@ -79,7 +92,7 @@ async fn auth(domain: String, id: String, secret: String) -> anyhow::Result<()> 
     };
 
     // check if credentials work
-    let _ = SwClient::new(credentials.clone(), 8).await?;
+    let _ = SwClient::new(credentials.clone(), SwClient::DEFAULT_IN_FLIGHT).await?;
 
     // write them to file
     let serialized = toml::to_string(&credentials)?;
@@ -107,10 +120,7 @@ async fn create_context(
         }
     }
 
-    let serialized_credentials = tokio::fs::read_to_string("./.credentials.toml")
-        .await
-        .context("No .credentials.toml found. Call command auth first.")?;
-    let credentials: Credentials = toml::from_str(&serialized_credentials)?;
+    let credentials = Credentials::read_credentials().await?;
     let sw_client = SwClient::new(credentials, in_flight_limit).await?;
 
     let api_schema = sw_client.entity_schema().await;
