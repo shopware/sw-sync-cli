@@ -78,8 +78,7 @@ async fn main() -> anyhow::Result<()> {
 async fn index(skip: Vec<String>) -> anyhow::Result<()> {
     let credentials = Credentials::read_credentials().await?;
 
-    // TODO: change in flight limit handling? Hardcoded default value?
-    let sw_client = SwClient::new(credentials, 8).await?;
+    let sw_client = SwClient::new(credentials, SwClient::DEFAULT_IN_FLIGHT).await?;
     sw_client.index(skip).await?;
 
     Ok(())
@@ -93,7 +92,7 @@ async fn auth(domain: String, id: String, secret: String) -> anyhow::Result<()> 
     };
 
     // check if credentials work
-    let _ = SwClient::new(credentials.clone(), 8).await?;
+    let _ = SwClient::new(credentials.clone(), SwClient::DEFAULT_IN_FLIGHT).await?;
 
     // write them to file
     let serialized = toml::to_string(&credentials)?;

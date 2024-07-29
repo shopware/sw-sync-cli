@@ -25,6 +25,8 @@ pub struct SwClient {
 }
 
 impl SwClient {
+    pub const DEFAULT_IN_FLIGHT: usize = 8;
+
     pub async fn new(credentials: Credentials, in_flight_limit: usize) -> anyhow::Result<Self> {
         let mut default_headers = HeaderMap::default();
         // This header is needed, otherwise the response would be "application/vnd.api+json" (by default)
