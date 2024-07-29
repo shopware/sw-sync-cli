@@ -16,7 +16,24 @@ mod cli;
 mod config_file;
 mod data;
 
-include!(concat!(env!("OUT_DIR"), "/profiles.rs"));
+const PROFILES: &[(&str, &str)] = &[
+    (
+        "manufacturer.yaml",
+        include_str!("../profiles/manufacturer.yaml"),
+    ),
+    (
+        "product_required.yaml",
+        include_str!("../profiles/product_required.yaml"),
+    ),
+    (
+        "product_variants.yaml",
+        include_str!("../profiles/product_variants.yaml"),
+    ),
+    (
+        "product_with_manufacturer.yaml",
+        include_str!("../profiles/product_with_manufacturer.yaml"),
+    ),
+];
 
 #[derive(Debug)]
 pub struct SyncContext {
