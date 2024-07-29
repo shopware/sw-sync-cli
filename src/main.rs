@@ -6,6 +6,7 @@ use crate::data::{export, import, prepare_scripting_environment, ScriptingEnviro
 use anyhow::Context;
 use clap::Parser;
 use std::collections::HashSet;
+use std::fs;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Instant;
@@ -14,6 +15,25 @@ mod api;
 mod cli;
 mod config_file;
 mod data;
+
+const PROFILES: &[(&str, &str)] = &[
+    (
+        "manufacturer.yaml",
+        include_str!("../profiles/manufacturer.yaml"),
+    ),
+    (
+        "product_required.yaml",
+        include_str!("../profiles/product_required.yaml"),
+    ),
+    (
+        "product_variants.yaml",
+        include_str!("../profiles/product_variants.yaml"),
+    ),
+    (
+        "product_with_manufacturer.yaml",
+        include_str!("../profiles/product_with_manufacturer.yaml"),
+    ),
+];
 
 #[derive(Debug)]
 pub struct SyncContext {
@@ -36,6 +56,9 @@ async fn main() -> anyhow::Result<()> {
         Commands::Index { skip } => {
             index(skip).await?;
             println!("Successfully triggered indexing.");
+        }
+        Commands::CopyProfiles { force, list, path } => {
+            copy_profiles(force, list, path);
         }
         Commands::Auth { domain, id, secret } => {
             auth(domain, id, secret).await?;
@@ -88,6 +111,50 @@ async fn index(skip: Vec<String>) -> anyhow::Result<()> {
     sw_client.index(skip).await?;
 
     Ok(())
+}
+
+pub fn copy_profiles(force: bool, list: bool, path: Option<PathBuf>) {
+    if list {
+        println!("Available profiles:");
+
+        for profile in PROFILES {
+            println!("- {}", profile.0);
+        }
+
+        return;
+    }
+
+    let mut dir_path = PathBuf::from("./profiles");
+
+    if path.is_some() {
+        let path = path.unwrap();
+
+        if !path.is_dir() && !force {
+            eprintln!("Path is not a directory: {:?}", path);
+            return;
+        }
+
+        dir_path = path;
+    }
+
+    if let Err(e) = fs::create_dir_all(&dir_path) {
+        eprintln!("Failed to create directory: {}", e);
+        return;
+    }
+
+    for (name, content) in PROFILES {
+        let dest_path = dir_path.join(name);
+
+        if dest_path.exists() && !force {
+            eprintln!("File {} already exists. Use --force to overwrite.", name);
+            continue;
+        }
+
+        match fs::write(&dest_path, content) {
+            Ok(_) => println!("Copied profile: {} -> {:?}", name, dest_path),
+            Err(e) => eprintln!("Failed to write file {}: {}", name, e),
+        }
+    }
 }
 
 async fn auth(domain: String, id: String, secret: String) -> anyhow::Result<()> {
