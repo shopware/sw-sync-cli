@@ -1,9 +1,8 @@
 use crate::api::SwClient;
 use crate::cli::{Cli, Commands, SyncMode};
-use crate::config_file::{Credentials, Mapping, Schema};
+use crate::config_file::{Credentials, Mapping, Profile, DEFAULT_PROFILES};
 use crate::data::validate_paths_for_entity;
 use crate::data::{export, import, prepare_scripting_environment, ScriptingEnvironment};
-use anyhow::Context;
 use clap::Parser;
 use std::collections::HashSet;
 use std::fs;
@@ -16,29 +15,10 @@ mod cli;
 mod config_file;
 mod data;
 
-const PROFILES: &[(&str, &str)] = &[
-    (
-        "manufacturer.yaml",
-        include_str!("../profiles/manufacturer.yaml"),
-    ),
-    (
-        "product_required.yaml",
-        include_str!("../profiles/product_required.yaml"),
-    ),
-    (
-        "product_variants.yaml",
-        include_str!("../profiles/product_variants.yaml"),
-    ),
-    (
-        "product_with_manufacturer.yaml",
-        include_str!("../profiles/product_with_manufacturer.yaml"),
-    ),
-];
-
 #[derive(Debug)]
 pub struct SyncContext {
     pub sw_client: SwClient,
-    pub schema: Schema,
+    pub profile: Profile,
     /// specifies the input or output file
     pub file: PathBuf,
     pub limit: Option<u64>,
@@ -62,36 +42,38 @@ async fn main() -> anyhow::Result<()> {
         }
         Commands::Auth { domain, id, secret } => {
             auth(domain, id, secret).await?;
-            println!("Successfully authenticated. You can continue with other commands now.")
+            println!("Successfully authenticated. You can continue with other commands now.");
         }
         Commands::Sync {
             mode,
-            schema,
+            profile,
             file,
             limit,
             disable_index,
             // verbose,
             in_flight_limit,
         } => {
-            let context = create_context(schema, file, limit, in_flight_limit).await?;
+            let context = create_context(profile, file, limit, in_flight_limit).await?;
 
             match mode {
                 SyncMode::Import => {
                     tokio::task::spawn_blocking(move || import(Arc::new(context))).await??;
 
                     println!("Imported successfully");
-                    println!("You might want to run the indexers in your shop now. Go to Settings -> System -> Caches & indexes");
+                    if disable_index {
+                        println!("Indexing was skipped, you might want to run the indexers in your shop later. Go to Settings -> System -> Caches & indexes");
+                        println!("Or simply run: sw-sync-cli index");
+                    } else {
+                        println!("Triggering indexing...");
+                        index(vec![]).await?;
+                        println!("Successfully triggered indexing.");
+                    }
                 }
                 SyncMode::Export => {
                     export(Arc::new(context)).await?;
 
                     println!("Exported successfully");
                 }
-            }
-
-            if !disable_index {
-                index(vec![]).await?;
-                println!("Successfully triggered indexing.");
             }
         }
     }
@@ -117,42 +99,40 @@ pub fn copy_profiles(force: bool, list: bool, path: Option<PathBuf>) {
     if list {
         println!("Available profiles:");
 
-        for profile in PROFILES {
+        for profile in DEFAULT_PROFILES {
             println!("- {}", profile.0);
         }
 
         return;
     }
 
-    let mut dir_path = PathBuf::from("./profiles");
-
-    if path.is_some() {
-        let path = path.unwrap();
-
-        if !path.is_dir() && !force {
-            eprintln!("Path is not a directory: {:?}", path);
+    let dir_path = if let Some(path) = path {
+        if path.extension().is_some() {
+            eprintln!("Path is not a directory: {path:?}");
             return;
         }
 
-        dir_path = path;
-    }
+        path
+    } else {
+        PathBuf::from("./profiles")
+    };
 
     if let Err(e) = fs::create_dir_all(&dir_path) {
-        eprintln!("Failed to create directory: {}", e);
+        eprintln!("Failed to create directory: {e}");
         return;
     }
 
-    for (name, content) in PROFILES {
+    for (name, content) in DEFAULT_PROFILES {
         let dest_path = dir_path.join(name);
 
         if dest_path.exists() && !force {
-            eprintln!("File {} already exists. Use --force to overwrite.", name);
+            eprintln!("File {name} already exists. Use --force to overwrite.");
             continue;
         }
 
         match fs::write(&dest_path, content) {
-            Ok(_) => println!("Copied profile: {} -> {:?}", name, dest_path),
-            Err(e) => eprintln!("Failed to write file {}: {}", name, e),
+            Ok(()) => println!("Copied profile: {name} -> {dest_path:?}"),
+            Err(e) => eprintln!("Failed to write file {name}: {e}"),
         }
     }
 }
@@ -175,17 +155,14 @@ async fn auth(domain: String, id: String, secret: String) -> anyhow::Result<()> 
 }
 
 async fn create_context(
-    schema: PathBuf,
+    profile_path: PathBuf,
     file: PathBuf,
     limit: Option<u64>,
     in_flight_limit: usize,
 ) -> anyhow::Result<SyncContext> {
-    let serialized_schema = tokio::fs::read_to_string(schema)
-        .await
-        .context("No provided schema file not found")?;
-    let schema: Schema = serde_yaml::from_str(&serialized_schema)?;
-    let mut associations = schema.associations.clone();
-    for mapping in &schema.mappings {
+    let profile = Profile::read_profile(profile_path).await?;
+    let mut associations = profile.associations.clone();
+    for mapping in &profile.mappings {
         if let Mapping::ByPath(by_path) = mapping {
             if let Some((association, _field)) = by_path.entity_path.rsplit_once('.') {
                 associations.insert(association.trim_end_matches('?').to_owned());
@@ -197,22 +174,22 @@ async fn create_context(
     let sw_client = SwClient::new(credentials, in_flight_limit).await?;
 
     let api_schema = sw_client.entity_schema().await;
-    let entity = &schema.entity;
+    let entity = &profile.entity;
 
-    validate_paths_for_entity(entity, &schema.mappings, &api_schema?)?;
+    validate_paths_for_entity(entity, &profile.mappings, &api_schema?)?;
 
     // ToDo: create lookup table for languages + currencies?
 
     let scripting_environment =
-        prepare_scripting_environment(&schema.serialize_script, &schema.deserialize_script)?;
+        prepare_scripting_environment(&profile.serialize_script, &profile.deserialize_script)?;
 
     Ok(SyncContext {
         sw_client,
-        schema,
-        scripting_environment,
+        profile,
         file,
         limit,
         in_flight_limit,
+        scripting_environment,
         associations,
     })
 }

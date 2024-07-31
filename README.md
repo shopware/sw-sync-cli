@@ -17,12 +17,13 @@ A CLI tool that communicates with the [Shopware admin API](https://shopware.stop
 ## Features
 
 - It's fast, with a focus on performance
-- Every entity and field available in the API can be exported / imported
+- Every entity and field available in the Shopware API can be exported / imported
 - Supports data filtering and sorting using the API criteria
-- Import / Export profiles (schema's) are just `.yaml` files
+- Import / Export profiles are just `.yaml` files
+  - That define the way data is processed for import and export
   - Which can be copied + adapted + shared freely
-- Profiles include a scripting engine for arbitrary data transformations
-- For now only supports CSV files
+  - They include a scripting engine for arbitrary data transformations
+- For now only supports CSV data files
 
 ## Installation
 
@@ -55,15 +56,16 @@ Then either execute the binary directly or put it in your `PATH`.
 > This will create a `.credentials.toml` file in your current working directory.
 > This file contains your credentials in plain text, you might want to remove it again after you are done syncing.
 
-3. Call `sw-sync-cli sync` in either `-m import` or `-m export` mode, with a profile (`schema.yaml`) and data file `data.csv`
+3. Call `sw-sync-cli sync` in either `-m import` or `-m export` mode, with a profile (`profile.yaml`) and data file `data.csv`
 
 > [!Note]  
 > You can call `sw-sync-cli help` at any time to get more information
 
-#### Profiles (sync schema)
+#### Profiles
 
+Profiles are used to define the mapping between (CSV) file columns and Shopware entity fields, as well as additional configuration for the import / export.
 To get started take a look at [Profiles in this repository](https://github.com/shopware/sw-sync-cli/tree/main/profiles).
-The structure of a profile (sync schema) `.yaml` is as follows:
+The structure of a profile `.yaml` is as follows:
 
 ```yaml
 entity: product

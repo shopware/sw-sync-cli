@@ -5,7 +5,7 @@ use std::collections::BTreeMap;
 
 #[derive(Debug, Serialize)]
 pub struct Criteria {
-    pub limit: Option<u64>,
+    pub limit: Option<usize>,
     pub page: u64,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub filter: Vec<CriteriaFilter>,
@@ -29,7 +29,11 @@ impl Default for Criteria {
 
 impl Criteria {
     /// Maximum limit accepted by the API server
-    pub const MAX_LIMIT: u64 = 500;
+    pub const MAX_LIMIT: usize = 500;
+
+    pub fn new() -> Self {
+        Self::default()
+    }
 
     pub fn add_filter(&mut self, filter: CriteriaFilter) -> &mut Self {
         self.filter.push(filter);
@@ -69,7 +73,7 @@ pub enum CriteriaSortingOrder {
     Descending,
 }
 
-/// See https://developer.shopware.com/docs/resources/references/core-reference/dal-reference/filters-reference.html
+/// See <https://developer.shopware.com/docs/resources/references/core-reference/dal-reference/filters-reference.html>
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "camelCase")]
 pub enum CriteriaFilter {
@@ -181,11 +185,7 @@ mod tests {
 
     #[test]
     fn criteria_serialize_sorting() {
-        let mut criteria = Criteria {
-            limit: Some(10),
-            page: 2,
-            ..Default::default()
-        };
+        let mut criteria = Criteria::new();
         criteria.add_sorting(CriteriaSorting {
             field: "manufacturerId".to_string(),
             order: CriteriaSortingOrder::Descending,
@@ -195,8 +195,8 @@ mod tests {
         assert_eq!(
             json,
             r#"{
-  "limit": 10,
-  "page": 2,
+  "limit": null,
+  "page": 1,
   "sort": [
     {
       "field": "manufacturerId",

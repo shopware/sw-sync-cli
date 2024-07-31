@@ -1,8 +1,8 @@
 //! Everything scripting related
 
 use crate::api::Entity;
-use crate::config_file::Mapping;
-use crate::SyncContext;
+use crate::config_file::{Mapping, Profile};
+use crate::data::transform::get_json_value_from_string;
 use anyhow::Context;
 use csv::StringRecord;
 use rhai::packages::{BasicArrayPackage, CorePackage, MoreStringPackage, Package};
@@ -21,17 +21,17 @@ impl ScriptingEnvironment {
         &self,
         headers: &StringRecord,
         row: &StringRecord,
-        context: &SyncContext,
+        profile: &Profile,
     ) -> anyhow::Result<Entity> {
         let Some(deserialize_script) = &self.deserialize else {
-            return Ok(Entity::with_capacity(context.schema.mappings.len()));
+            return Ok(Entity::with_capacity(profile.mappings.len()));
         };
 
         // build row object
         let mut script_row = rhai::Map::new();
-        let script_mappings = context.schema.mappings.iter().filter_map(|m| match m {
+        let script_mappings = profile.mappings.iter().filter_map(|m| match m {
             Mapping::ByScript(s) => Some(s),
-            _ => None,
+            Mapping::ByPath(_) => None,
         });
         for mapping in script_mappings {
             let column_index = headers
@@ -41,11 +41,15 @@ impl ScriptingEnvironment {
                     format!("Can't find column '{}' in CSV headers", mapping.file_column)
                 })?;
 
-            let value = row
+            let raw_value = row
                 .get(column_index)
                 .context("failed to get column of row")?;
 
-            script_row.insert(mapping.key.as_str().into(), value.into());
+            let json_value = get_json_value_from_string(raw_value);
+            let script_value = rhai::serde::to_dynamic(json_value)
+                .context("failed to convert CSV value into script value")?;
+
+            script_row.insert(mapping.key.as_str().into(), script_value);
         }
 
         // run the script
@@ -61,7 +65,7 @@ impl ScriptingEnvironment {
         let row_result: rhai::Map = scope
             .get_value("entity")
             .expect("row should exist in script scope");
-        let mut entity_after_script = Entity::with_capacity(context.schema.mappings.len());
+        let mut entity_after_script = Entity::with_capacity(profile.mappings.len());
         for (key, value) in row_result {
             let json_value: serde_json::Value = rhai::serde::from_dynamic(&value)?;
             entity_after_script.insert(key.to_string(), json_value);
@@ -101,21 +105,21 @@ pub fn prepare_scripting_environment(
     raw_deserialize_script: &str,
 ) -> anyhow::Result<ScriptingEnvironment> {
     let engine = get_base_engine();
-    let serialize_ast = if !raw_serialize_script.is_empty() {
+    let serialize_ast = if raw_serialize_script.is_empty() {
+        None
+    } else {
         let ast = engine
             .compile(raw_serialize_script)
             .context("serialize_script compilation failed")?;
         Some(ast)
-    } else {
-        None
     };
-    let deserialize_ast = if !raw_deserialize_script.is_empty() {
+    let deserialize_ast = if raw_deserialize_script.is_empty() {
+        None
+    } else {
         let ast = engine
             .compile(raw_deserialize_script)
             .context("serialize_script compilation failed")?;
         Some(ast)
-    } else {
-        None
     };
 
     Ok(ScriptingEnvironment {
@@ -168,12 +172,12 @@ fn get_base_engine() -> Engine {
 /// Utilities for inside scripts
 ///
 /// Important, don't use the type `String` as function parameters, see
-/// https://rhai.rs/book/rust/strings.html
+/// <https://rhai.rs/book/rust/strings.html>
 mod inside_script {
     use rhai::ImmutableString;
 
     /// Imitate
-    /// https://github.com/shopware/shopware/blob/03cfe8cca937e6e45c9c3e15821d1449dfd01d82/src/Core/Defaults.php
+    /// [Defaults.php from Shopware](https://github.com/shopware/shopware/blob/03cfe8cca937e6e45c9c3e15821d1449dfd01d82/src/Core/Defaults.php)
     pub fn get_default(name: &str) -> ImmutableString {
         match name {
             "LANGUAGE_SYSTEM" => "2fbb5fe2e29a4d70aa5854ce7ce3e20b".into(),
@@ -201,5 +205,94 @@ mod inside_script {
                 ]
             )
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config_file::EntityScriptMapping;
+    use rhai::Dynamic;
+    use serde_json::json;
+
+    #[test]
+    fn test_basic_serialize() {
+        let script_env = prepare_scripting_environment(
+            r#"
+            // serialize
+            row["bar"] = entity["fiz"] + "added";
+            row["number + 1"] = entity["number"] + 1;
+        "#,
+            r#"
+            // deserialize
+        "#,
+        )
+        .unwrap();
+
+        let entity: Entity = serde_json::from_value(json!({
+            "fiz": "buzz",
+            "number": 42,
+        }))
+        .unwrap();
+
+        let row = script_env.run_serialize(&entity).unwrap();
+        let row_json: serde_json::Value =
+            serde_json::from_value(rhai::serde::from_dynamic(&Dynamic::from(row)).unwrap())
+                .unwrap();
+
+        assert_eq!(
+            row_json,
+            json!({
+                "bar": "buzzadded",
+                "number + 1": 43
+            })
+        );
+    }
+
+    #[test]
+    fn test_basic_deserialize() {
+        let script_env = prepare_scripting_environment(
+            r#"
+            // serialize
+        "#,
+            r#"
+            // deserialize
+            entity["fiz"] = row["bar_key"];
+            entity["number"] = row["number_plus_one"] - 1;
+            entity["currencyId"] = get_default("CURRENCY");
+        "#,
+        )
+        .unwrap();
+
+        let profile = Profile {
+            entity: "custom".to_string(),
+            mappings: vec![
+                Mapping::ByScript(EntityScriptMapping {
+                    file_column: "bar".to_string(),
+                    key: "bar_key".to_string(),
+                }),
+                Mapping::ByScript(EntityScriptMapping {
+                    file_column: "number + 1".to_string(),
+                    key: "number_plus_one".to_string(),
+                }),
+            ],
+            ..Default::default()
+        };
+        let headers = StringRecord::from(vec!["bar", "number + 1"]);
+        let row = StringRecord::from(vec!["buzz", "43"]);
+
+        let entity = script_env
+            .run_deserialize(&headers, &row, &profile)
+            .unwrap();
+
+        assert_eq!(
+            entity,
+            serde_json::from_value(json!({
+                "fiz": "buzz",
+                "number": 42,
+                "currencyId": inside_script::get_default("CURRENCY"),
+            }))
+            .unwrap()
+        );
     }
 }

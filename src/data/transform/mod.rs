@@ -3,8 +3,8 @@
 pub mod script;
 
 use crate::api::Entity;
-use crate::config_file::Mapping;
-use crate::SyncContext;
+use crate::config_file::{Mapping, Profile};
+use crate::data::ScriptingEnvironment;
 use anyhow::Context;
 use csv::StringRecord;
 use std::str::FromStr;
@@ -12,15 +12,14 @@ use std::str::FromStr;
 /// Deserialize a single row of the input (CSV) file into a json object
 pub fn deserialize_row(
     headers: &StringRecord,
-    row: StringRecord,
-    context: &SyncContext,
+    row: &StringRecord,
+    profile: &Profile,
+    scripting_environment: &ScriptingEnvironment,
 ) -> anyhow::Result<Entity> {
     // Either run deserialize script or create initial empty entity object
-    let mut entity = context
-        .scripting_environment
-        .run_deserialize(headers, &row, context)?;
+    let mut entity = scripting_environment.run_deserialize(headers, row, profile)?;
 
-    for mapping in &context.schema.mappings {
+    for mapping in &profile.mappings {
         match mapping {
             Mapping::ByPath(path_mapping) => {
                 let column_index = headers
@@ -50,11 +49,15 @@ pub fn deserialize_row(
 }
 
 /// Serialize a single entity (as json object) into a single row (string columns)
-pub fn serialize_entity(entity: Entity, context: &SyncContext) -> anyhow::Result<Vec<String>> {
-    let script_row = context.scripting_environment.run_serialize(&entity)?;
-    let mut row = Vec::with_capacity(context.schema.mappings.len());
+pub fn serialize_entity(
+    entity: &Entity,
+    profile: &Profile,
+    scripting_environment: &ScriptingEnvironment,
+) -> anyhow::Result<Vec<String>> {
+    let script_row = scripting_environment.run_serialize(entity)?;
+    let mut row = Vec::with_capacity(profile.mappings.len());
 
-    for mapping in &context.schema.mappings {
+    for mapping in &profile.mappings {
         match mapping {
             Mapping::ByPath(path_mapping) => {
                 let value = entity.get_by_path(&path_mapping.entity_path)
@@ -131,15 +134,12 @@ impl EntityPath for Entity {
         // initial access happens on map
         let first_token = tokens.next()?;
         let first_optional = optional_chain.next()?;
-        let mut value = match self.get(first_token) {
-            Some(v) => v,
-            None => {
-                if first_optional {
-                    return Some(&serde_json::Value::Null);
-                } else {
-                    return None;
-                }
-            }
+        let Some(mut value) = self.get(first_token) else {
+            return if first_optional {
+                Some(&serde_json::Value::Null)
+            } else {
+                None
+            };
         };
 
         // the question mark refers to the current token and allows it to be undefined
@@ -169,9 +169,7 @@ impl EntityPath for Entity {
     }
 
     fn insert_by_path(&mut self, path: &str, value: serde_json::Value) {
-        if path.is_empty() {
-            panic!("empty entity_path encountered");
-        }
+        assert!(!path.is_empty(), "empty entity_path encountered");
         if value.is_null() {
             return; // do nothing
         }
@@ -216,7 +214,7 @@ impl EntityPath for Entity {
 
 #[cfg(test)]
 mod tests {
-    use crate::data::transform::EntityPath;
+    use crate::data::transform::{get_json_value_from_string, EntityPath};
     use serde_json::{json, Number, Value};
 
     #[test]
@@ -403,5 +401,25 @@ mod tests {
                 },
             })
         );
+    }
+
+    #[test]
+    fn test_get_json_value_from_string() {
+        let value = get_json_value_from_string("null");
+        assert_eq!(value, json!(null));
+        let value = get_json_value_from_string("");
+        assert_eq!(value, json!(null));
+
+        let value = get_json_value_from_string("true");
+        assert_eq!(value, json!(true));
+
+        let value = get_json_value_from_string("false");
+        assert_eq!(value, json!(false));
+
+        let value = get_json_value_from_string("42.42");
+        assert_eq!(value, json!(42.42));
+
+        let value = get_json_value_from_string("my string");
+        assert_eq!(value, json!("my string"));
     }
 }
