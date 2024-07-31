@@ -6,8 +6,9 @@
 - NEXT-37316 - Added `index` command, to trigger the indexing of the Shopware shop
 - NEXT-37315 - Trigger indexing of the shop by default at the end of an import (can be disabled with flag `-d` `--disable-index`)
 - NEXT-37303 - [BREAKING] changed `sync` command argument `--schema` `-s` to `--profile` `-p`
-- NEXT-37303 - [BREAKING] Fixed an issue where `row` values were always provided as strings in the deserialize script.
-  Now they are converted into their proper types before passed to the script.
+- NEXT-37303 - [BREAKING] Fixed an issue where `row` values were always provided as strings in the deserialize script. 
+Now they are converted into their proper types before passed to the script.
+- NEXT-37313 - Implemented re-authentication for API calls to handle expired bearer tokens
 
 # v0.7.1
 
