@@ -27,6 +27,10 @@ pub async fn export(context: Arc<SyncContext>) -> anyhow::Result<()> {
         .get_total(&context.profile.entity, &context.profile.filter)
         .await?;
 
+    if total == 0 {
+        return Err(anyhow::anyhow!("No entities found for export."));
+    }
+
     if let Some(limit) = context.limit {
         total = cmp::min(limit, total);
     }
