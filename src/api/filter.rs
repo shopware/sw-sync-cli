@@ -12,7 +12,7 @@ pub struct Criteria {
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub sort: Vec<CriteriaSorting>,
     #[serde(skip_serializing_if = "BTreeMap::is_empty")]
-    pub associations: BTreeMap<String, EmptyObject>,
+    pub associations: BTreeMap<String, Criteria>,
 }
 
 impl Default for Criteria {
@@ -39,8 +39,16 @@ impl Criteria {
         self.sort.push(sorting);
     }
 
-    pub fn add_association<S: Into<String>>(&mut self, association: S) {
-        self.associations.insert(association.into(), EmptyObject {});
+    pub fn add_association<S: Into<String>>(&mut self, association_path: S) -> &mut Self {
+        let mut current = self;
+        
+        for part in association_path.into().split('.') {
+            current = current.associations
+                .entry(part.to_string())
+                .or_insert_with(Criteria::default);
+        }
+        
+        current
     }
 }
 

@@ -12,9 +12,11 @@ pub async fn export(context: Arc<SyncContext>) -> anyhow::Result<()> {
     if !context.associations.is_empty() {
         println!("Using associations: {:#?}", context.associations);
     }
+    
     if !context.schema.filter.is_empty() {
         println!("Using filter: {:#?}", context.schema.filter);
     }
+    
     if !context.schema.sort.is_empty() {
         println!("Using sort: {:#?}", context.schema.sort);
     }
@@ -24,9 +26,11 @@ pub async fn export(context: Arc<SyncContext>) -> anyhow::Result<()> {
         .sw_client
         .get_total(&context.schema.entity, &context.schema.filter)
         .await?;
+    
     if let Some(limit) = context.limit {
         total = cmp::min(limit, total);
     }
+    
     let chunk_limit = cmp::min(Criteria::MAX_LIMIT, total);
     let chunk_count = total.div_ceil(chunk_limit);
     println!(
@@ -37,6 +41,7 @@ pub async fn export(context: Arc<SyncContext>) -> anyhow::Result<()> {
     // submit request tasks
     #[allow(clippy::type_complexity)]
     let mut request_tasks: Vec<JoinHandle<anyhow::Result<(u64, Vec<Vec<String>>)>>> = vec![];
+
     for i in 0..chunk_count {
         let page = i + 1;
 
@@ -48,10 +53,12 @@ pub async fn export(context: Arc<SyncContext>) -> anyhow::Result<()> {
             // and wait for it to finish
             let (worker_tx, worker_rx) =
                 tokio::sync::oneshot::channel::<anyhow::Result<(u64, Vec<Vec<String>>)>>();
+
             rayon::spawn(move || {
                 let result = process_response(page, chunk_limit, response, &context);
                 worker_tx.send(result).unwrap();
             });
+
             worker_rx.await?
         }));
     }
@@ -77,6 +84,7 @@ async fn send_request(
         filter: context.schema.filter.clone(),
         ..Default::default()
     };
+
     for association in &context.associations {
         criteria.add_association(association);
     }
@@ -96,6 +104,7 @@ fn process_response(
     context: &SyncContext,
 ) -> anyhow::Result<(u64, Vec<Vec<String>>)> {
     let mut rows: Vec<Vec<String>> = Vec::with_capacity(chunk_limit as usize);
+
     for entity in response.data {
         let row = serialize_entity(entity, context)?;
         rows.push(row);
