@@ -5,3 +5,5 @@
 /data
 
 .credentials.toml
+
+*.csv
