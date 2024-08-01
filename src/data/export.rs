@@ -12,11 +12,11 @@ pub async fn export(context: Arc<SyncContext>) -> anyhow::Result<()> {
     if !context.associations.is_empty() {
         println!("Using associations: {:#?}", context.associations);
     }
-    
+
     if !context.schema.filter.is_empty() {
         println!("Using filter: {:#?}", context.schema.filter);
     }
-    
+
     if !context.schema.sort.is_empty() {
         println!("Using sort: {:#?}", context.schema.sort);
     }
@@ -26,11 +26,11 @@ pub async fn export(context: Arc<SyncContext>) -> anyhow::Result<()> {
         .sw_client
         .get_total(&context.schema.entity, &context.schema.filter)
         .await?;
-    
+
     if let Some(limit) = context.limit {
         total = cmp::min(limit, total);
     }
-    
+
     let chunk_limit = cmp::min(Criteria::MAX_LIMIT, total);
     let chunk_count = total.div_ceil(chunk_limit);
     println!(

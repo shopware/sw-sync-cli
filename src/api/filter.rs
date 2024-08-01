@@ -41,13 +41,14 @@ impl Criteria {
 
     pub fn add_association<S: Into<String>>(&mut self, association_path: S) -> &mut Self {
         let mut current = self;
-        
+
         for part in association_path.into().split('.') {
-            current = current.associations
+            current = current
+                .associations
                 .entry(part.to_string())
                 .or_insert_with(Criteria::default);
         }
-        
+
         current
     }
 }
@@ -148,7 +149,7 @@ mod tests {
             ..Default::default()
         };
         criteria.add_association("manufacturer");
-        criteria.add_association("cover");
+        criteria.add_association("cover.media");
 
         let json = serde_json::to_string_pretty(&criteria).unwrap();
         assert_eq!(
@@ -157,8 +158,20 @@ mod tests {
   "limit": 10,
   "page": 2,
   "associations": {
-    "cover": {},
-    "manufacturer": {}
+    "cover": {
+      "limit": 500,
+      "page": 1,
+      "associations": {
+        "media": {
+          "limit": 500,
+          "page": 1
+        }
+      }
+    },
+    "manufacturer": {
+      "limit": 500,
+      "page": 1
+    }
   }
 }"#
         );
