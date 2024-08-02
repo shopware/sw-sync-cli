@@ -5,7 +5,9 @@ use std::collections::BTreeMap;
 
 #[derive(Debug, Serialize)]
 pub struct Criteria {
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub limit: Option<usize>,
+    #[serde(skip_serializing_if = "skip_page_serialize")]
     pub page: u64,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub filter: Vec<CriteriaFilter>,
@@ -13,6 +15,10 @@ pub struct Criteria {
     pub sort: Vec<CriteriaSorting>,
     #[serde(skip_serializing_if = "BTreeMap::is_empty")]
     pub associations: BTreeMap<String, Criteria>,
+}
+
+fn skip_page_serialize(page: &u64) -> bool {
+    *page == 1
 }
 
 impl Default for Criteria {
@@ -49,10 +55,7 @@ impl Criteria {
         let mut current: &mut Criteria = self;
 
         for part in association_path.split('.') {
-            current = current
-                .associations
-                .entry(part.to_string())
-                .or_insert_with(Criteria::default);
+            current = current.associations.entry(part.to_string()).or_default();
         }
 
         self
@@ -165,19 +168,11 @@ mod tests {
   "page": 2,
   "associations": {
     "cover": {
-      "limit": null,
-      "page": 1,
       "associations": {
-        "media": {
-          "limit": null,
-          "page": 1
-        }
+        "media": {}
       }
     },
-    "manufacturer": {
-      "limit": null,
-      "page": 1
-    }
+    "manufacturer": {}
   }
 }"#
         );
@@ -195,8 +190,6 @@ mod tests {
         assert_eq!(
             json,
             r#"{
-  "limit": null,
-  "page": 1,
   "sort": [
     {
       "field": "manufacturerId",
