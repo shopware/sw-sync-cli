@@ -196,10 +196,16 @@ impl SwClient {
         let response = {
             let _lock = self.in_flight_semaphore.acquire().await.unwrap();
             let start_instant = Instant::now();
-            println!(
-                "fetching page {} of '{}' with limit {}",
-                criteria.page, entity, criteria.limit
-            );
+
+            if let Some(limit) = criteria.limit {
+                println!(
+                    "fetching page {} of '{}' with limit {}",
+                    criteria.page, entity, limit
+                );
+            } else {
+                println!("fetching page {} of '{}'", criteria.page, entity);
+            }
+
             let res = self
                 .client
                 .post(format!(

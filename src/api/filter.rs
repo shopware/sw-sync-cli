@@ -5,7 +5,7 @@ use std::collections::BTreeMap;
 
 #[derive(Debug, Serialize)]
 pub struct Criteria {
-    pub limit: u64,
+    pub limit: Option<u64>,
     pub page: u64,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub filter: Vec<CriteriaFilter>,
@@ -18,7 +18,7 @@ pub struct Criteria {
 impl Default for Criteria {
     fn default() -> Self {
         Self {
-            limit: Self::MAX_LIMIT,
+            limit: None,
             page: 1,
             sort: vec![],
             filter: vec![],
@@ -31,25 +31,27 @@ impl Criteria {
     /// Maximum limit accepted by the API server
     pub const MAX_LIMIT: u64 = 500;
 
-    pub fn add_filter(&mut self, filter: CriteriaFilter) {
+    pub fn add_filter(&mut self, filter: CriteriaFilter) -> &mut Self {
         self.filter.push(filter);
+        self
     }
 
-    pub fn add_sorting(&mut self, sorting: CriteriaSorting) {
+    pub fn add_sorting(&mut self, sorting: CriteriaSorting) -> &mut Self {
         self.sort.push(sorting);
+        self
     }
 
-    pub fn add_association<S: Into<String>>(&mut self, association_path: S) -> &mut Self {
-        let mut current = self;
+    pub fn add_association(&mut self, association_path: &str) -> &mut Self {
+        let mut current: &mut Criteria = self;
 
-        for part in association_path.into().split('.') {
+        for part in association_path.split('.') {
             current = current
                 .associations
                 .entry(part.to_string())
                 .or_insert_with(Criteria::default);
         }
 
-        current
+        self
     }
 }
 
@@ -144,7 +146,7 @@ mod tests {
     #[test]
     fn criteria_serialize_association() {
         let mut criteria = Criteria {
-            limit: 10,
+            limit: Some(10),
             page: 2,
             ..Default::default()
         };
@@ -159,17 +161,17 @@ mod tests {
   "page": 2,
   "associations": {
     "cover": {
-      "limit": 500,
+      "limit": null,
       "page": 1,
       "associations": {
         "media": {
-          "limit": 500,
+          "limit": null,
           "page": 1
         }
       }
     },
     "manufacturer": {
-      "limit": 500,
+      "limit": null,
       "page": 1
     }
   }
@@ -180,7 +182,7 @@ mod tests {
     #[test]
     fn criteria_serialize_sorting() {
         let mut criteria = Criteria {
-            limit: 10,
+            limit: Some(10),
             page: 2,
             ..Default::default()
         };
@@ -208,7 +210,7 @@ mod tests {
     #[test]
     fn criteria_serialize_filter() {
         let mut criteria = Criteria {
-            limit: 10,
+            limit: Some(10),
             page: 2,
             ..Default::default()
         };

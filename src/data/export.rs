@@ -79,7 +79,7 @@ async fn send_request(
 ) -> anyhow::Result<SwListResponse> {
     let mut criteria = Criteria {
         page,
-        limit: chunk_limit,
+        limit: Some(chunk_limit),
         sort: context.schema.sort.clone(),
         filter: context.schema.filter.clone(),
         ..Default::default()
