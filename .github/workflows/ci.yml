@@ -104,12 +104,16 @@ jobs:
           comment += 'Coverage is just a tool to detect forgotten code paths you may want to think about, not your instructor to write tests\n';
           comment += '</details>\n';
           
-          github.rest.issues.createComment({
-            issue_number: context.issue.number,
-            owner: context.repo.owner,
-            repo: context.repo.repo,
-            body: comment,
-          });
+          if (context?.issue?.number) {
+              github.rest.issues.createComment({
+                  issue_number: context.issue.number,
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  body: comment,
+              });
+          } else {
+              core.log(comment);
+          }
 
   rustfmt:
     name: Rustfmt
