@@ -23,15 +23,18 @@ pub fn import(context: Arc<SyncContext>) -> anyhow::Result<()> {
         .map(|result| match result {
             Ok(record) => record,
             Err(e) => {
-                panic!("failed to read CSV record: {}", e);
+                panic!("failed to read CSV record: {e}");
             }
         })
         .enumerate()
-        .take(context.limit.unwrap_or(u64::MAX) as usize);
+        .take(
+            usize::try_from(context.limit.unwrap_or(u64::MAX))
+                .expect("64 bit system wide pointers or values smaller than usize"),
+        );
 
     // iterate in chunks of Criteria::MAX_LIMIT or less
     let mut join_handles: Vec<JoinHandle<anyhow::Result<()>>> = vec![];
-    for sync_values in &iter.chunks(Criteria::MAX_LIMIT as usize) {
+    for sync_values in &iter.chunks(Criteria::MAX_LIMIT) {
         let (row_indices, records_chunk): (Vec<usize>, Vec<StringRecord>) = sync_values.unzip();
 
         // ToDo: we might want to wait here instead of processing the whole CSV file
@@ -69,9 +72,14 @@ async fn process_chunk(
     let context = Arc::clone(context);
     let (worker_tx, worker_rx) = tokio::sync::oneshot::channel::<anyhow::Result<Vec<Entity>>>();
     rayon::spawn(move || {
-        let mut entities: Vec<Entity> = Vec::with_capacity(Criteria::MAX_LIMIT as usize);
+        let mut entities: Vec<Entity> = Vec::with_capacity(Criteria::MAX_LIMIT);
         for record in records_chunk {
-            let entity = match deserialize_row(&headers, record, &context) {
+            let entity = match deserialize_row(
+                &headers,
+                &record,
+                &context.profile,
+                &context.scripting_environment,
+            ) {
                 Ok(e) => e,
                 Err(e) => {
                     worker_tx.send(Err(e)).unwrap();
@@ -94,7 +102,7 @@ async fn sync_chunk(
 ) -> anyhow::Result<()> {
     match context
         .sw_client
-        .sync(&context.schema.entity, SyncAction::Upsert, &chunk)
+        .sync(&context.profile.entity, SyncAction::Upsert, &chunk)
         .await
     {
         Ok(()) => Ok(()),
@@ -104,7 +112,7 @@ async fn sync_chunk(
             // retry
             context
                 .sw_client
-                .sync(&context.schema.entity, SyncAction::Upsert, &chunk)
+                .sync(&context.profile.entity, SyncAction::Upsert, &chunk)
                 .await?;
             Ok(())
         }
@@ -118,7 +126,7 @@ fn remove_invalid_entries_from_chunk(
     error_body: SwErrorBody,
 ) {
     let mut to_be_removed = vec![];
-    for err in error_body.errors.into_iter() {
+    for err in error_body.errors {
         const PREFIX: &str = "/write_data/";
         let (entry_str, remaining_pointer) = &err.source.pointer[PREFIX.len()..]
             .split_once('/')

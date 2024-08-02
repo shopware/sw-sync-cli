@@ -13,10 +13,13 @@ on:
       - main        # triggers on pushes that contain changes in main
 
 jobs:
-  build:
-    name: Build
+  build_and_test:
+    name: Build and Test
 
     runs-on: ubuntu-latest # full build + test on every major platform is done by the release pipeline
+
+    env:
+      RUST_BACKTRACE: 1
 
     steps:
     - uses: actions/checkout@v4
@@ -24,14 +27,89 @@ jobs:
     - name: Install latest stable Rust version
       uses: dtolnay/rust-toolchain@stable
 
+    - name: Install cargo-llvm-cov
+      uses: taiki-e/install-action@cargo-llvm-cov
+
     - uses: Swatinem/rust-cache@v2
 
     - name: Cargo build
       run: cargo build --verbose
 
-    - name: Cargo test
-      run: cargo test --verbose --all-features
+    - name: Generate coverage data json
+      run: cargo llvm-cov --all-features --no-fail-fast --json --output-path ./coverage.json
 
+    - name: Generate coverage data HTML report
+      run: cargo llvm-cov --all-features --no-fail-fast --html
+
+    - uses: actions/upload-artifact@v4
+      id: coverage_upload
+      with:
+        name: coverage-html-report
+        path: target/llvm-cov/html/
+
+    - uses: actions/github-script@v7
+      env:
+        ARTIFACT_URL: '${{steps.coverage_upload.outputs.artifact-url}}'
+      with:
+        script: |
+          const { ARTIFACT_URL } = process.env;
+          
+          let coverageData = '';
+          try {
+              const fs = require('fs');
+              const coverageText = fs.readFileSync('./coverage.json');
+              coverageData = JSON.parse(coverageText).data[0];
+          } catch(err) {
+            core.error("Error while reading or parsing the coverage JSON")
+            core.setFailed(err)
+          }
+          
+          let totalLines = coverageData.totals.lines
+          let comment = 'Summary of the total line code coverage for the whole codebase\n';
+          comment += '| Total lines | Covered | Skipped | % |\n';
+          comment += '|--|--|--|--|\n';
+          comment += `| ${totalLines.count} | ${totalLines.covered} | ${totalLines.count - totalLines.covered} | ${totalLines.percent.toFixed(2)} |\n`;
+          comment += '\n';
+          
+          // file details
+          comment += '<details>\n';
+          comment += '<summary>Summary of each file (click to expand)</summary>\n';
+          comment += '\n';
+          comment += '| File | Total lines | Covered | Skipped | % |\n';
+          comment += '|--|--|--|--|--|\n';
+          const partToSkip = '/home/runner/work/sw-sync-cli/sw-sync-cli/';
+          coverageData.files.forEach((file) => {
+              const totalLines = file.summary.lines;
+              comment += `| ${file.filename.replace(partToSkip, '')} | ${totalLines.count} | ${totalLines.covered} | ${totalLines.count - totalLines.covered} | ${totalLines.percent.toFixed(2)} |\n`;
+          });
+          comment += '\n';
+          comment += '</details>\n';
+          
+          // more details
+          comment += '<details>\n';
+          comment += '<summary>More details (click to expand)</summary>\n';
+          comment += '\n';
+          comment += '### Download full HTML report\n';
+          comment += `You can download the full HTML report here: [click to download](${ARTIFACT_URL})\n`;
+          comment += 'Hint: You need to extract it locally and open the `index.html`, there you can see which lines are not covered in each file.\n';
+          comment += '\n';
+          comment += '### You can also generate these reports locally\n';
+          comment += 'For that, you need to install [cargo-llvm-cov](https://github.com/taiki-e/cargo-llvm-cov), then you can run:\n';
+          comment += '```bash\n';
+          comment += 'cargo llvm-cov --all-features --no-fail-fast --open\n';
+          comment += '```\n';
+          comment += 'Hint: There are also other ways to see code coverage in Rust. For example with RustRover, you can execute tests with coverage generation directly in the IDE.\n';
+          comment += '### Remember\n';
+          comment += 'Your tests should be meaningful and not just be written to raise the coverage.\n';
+          comment += 'Coverage is just a tool to detect forgotten code paths you may want to think about, not your instructor to write tests\n';
+          comment += '</details>\n';
+          
+          github.rest.issues.createComment({
+            issue_number: context.issue.number,
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            body: comment,
+          });
 
   rustfmt:
     name: Rustfmt
@@ -53,6 +131,8 @@ jobs:
   clippy_check:
     name: Clippy check
     runs-on: ubuntu-latest
+    env:
+      RUSTFLAGS: "-Dwarnings" # fail CI even with only warnings
     steps:
       - uses: actions/checkout@v4
 

@@ -13,29 +13,32 @@ pub async fn export(context: Arc<SyncContext>) -> anyhow::Result<()> {
         println!("Using associations: {:#?}", context.associations);
     }
 
-    if !context.schema.filter.is_empty() {
-        println!("Using filter: {:#?}", context.schema.filter);
+    if !context.profile.filter.is_empty() {
+        println!("Using filter: {:#?}", context.profile.filter);
     }
 
-    if !context.schema.sort.is_empty() {
-        println!("Using sort: {:#?}", context.schema.sort);
+    if !context.profile.sort.is_empty() {
+        println!("Using sort: {:#?}", context.profile.sort);
     }
 
     // retrieve total entity count from shopware and calculate chunk count
     let mut total = context
         .sw_client
-        .get_total(&context.schema.entity, &context.schema.filter)
+        .get_total(&context.profile.entity, &context.profile.filter)
         .await?;
 
     if let Some(limit) = context.limit {
         total = cmp::min(limit, total);
     }
 
-    let chunk_limit = cmp::min(Criteria::MAX_LIMIT, total);
-    let chunk_count = total.div_ceil(chunk_limit);
+    let chunk_limit = cmp::min(
+        Criteria::MAX_LIMIT,
+        usize::try_from(total).expect("64 bit system wide pointers or values smaller than usize"),
+    );
+    let chunk_count = total.div_ceil(chunk_limit as u64);
     println!(
         "Reading {} of entity '{}' with chunk limit {}, resulting in {} chunks to be processed",
-        total, context.schema.entity, chunk_limit, chunk_count
+        total, context.profile.entity, chunk_limit, chunk_count
     );
 
     // submit request tasks
@@ -74,14 +77,14 @@ pub async fn export(context: Arc<SyncContext>) -> anyhow::Result<()> {
 
 async fn send_request(
     page: u64,
-    chunk_limit: u64,
+    chunk_limit: usize,
     context: &SyncContext,
 ) -> anyhow::Result<SwListResponse> {
     let mut criteria = Criteria {
         page,
         limit: Some(chunk_limit),
-        sort: context.schema.sort.clone(),
-        filter: context.schema.filter.clone(),
+        sort: context.profile.sort.clone(),
+        filter: context.profile.filter.clone(),
         ..Default::default()
     };
 
@@ -91,7 +94,7 @@ async fn send_request(
 
     let response = context
         .sw_client
-        .list(&context.schema.entity, &criteria)
+        .list(&context.profile.entity, &criteria)
         .await?;
 
     Ok(response)
@@ -99,14 +102,14 @@ async fn send_request(
 
 fn process_response(
     page: u64,
-    chunk_limit: u64,
+    chunk_limit: usize,
     response: SwListResponse,
     context: &SyncContext,
 ) -> anyhow::Result<(u64, Vec<Vec<String>>)> {
-    let mut rows: Vec<Vec<String>> = Vec::with_capacity(chunk_limit as usize);
+    let mut rows: Vec<Vec<String>> = Vec::with_capacity(chunk_limit);
 
     for entity in response.data {
-        let row = serialize_entity(entity, context)?;
+        let row = serialize_entity(&entity, &context.profile, &context.scripting_environment)?;
         rows.push(row);
     }
 
@@ -128,7 +131,7 @@ async fn write_to_file(
     for handle in worker_handles {
         // ToDo: we might want to handle the errors more gracefully here and don't stop on first error
         let (page, rows) = handle.await??;
-        println!("writing page {}", page);
+        println!("writing page {page}");
 
         for row in rows {
             csv_writer.write_record(row)?;
@@ -143,7 +146,7 @@ async fn write_to_file(
 fn get_header_line(context: &SyncContext) -> Vec<String> {
     let mut columns = vec![];
 
-    for mapping in &context.schema.mappings {
+    for mapping in &context.profile.mappings {
         columns.push(mapping.get_file_column().to_owned());
     }
 

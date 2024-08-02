@@ -1,18 +1,20 @@
 //! Definitions for the CLI commands, arguments and help texts
 //!
-//! Makes heavy use of https://docs.rs/clap/latest/clap/
+//! Makes heavy use of <https://docs.rs/clap/latest/clap/>
 
+use crate::api::SwClient;
 use clap::{Parser, Subcommand};
 use std::path::PathBuf;
+use std::string::ToString;
 
-#[derive(Parser)]
+#[derive(Debug, PartialEq, Eq, Parser)]
 #[command(version, about, long_about = None)]
 pub struct Cli {
     #[command(subcommand)]
     pub command: Commands,
 }
 
-#[derive(Subcommand)]
+#[derive(Debug, PartialEq, Eq, Subcommand)]
 pub enum Commands {
     /// Trigger indexing of all registered indexer in shopware asynchronously.
     Index {
@@ -43,11 +45,11 @@ pub enum Commands {
         #[arg(short, long)]
         domain: String,
 
-        /// access_key_id
+        /// integration access key id
         #[arg(short, long)]
         id: String,
 
-        /// access_key_secret
+        /// integration access key secret
         #[arg(short, long)]
         secret: String,
     },
@@ -58,15 +60,15 @@ pub enum Commands {
         #[arg(value_enum, short, long)]
         mode: SyncMode,
 
-        /// Path to profile schema.yaml
+        /// Path to profile.yaml
         #[arg(short, long)]
-        schema: PathBuf,
+        profile: PathBuf,
 
         /// Path to data file
         #[arg(short, long)]
         file: PathBuf,
 
-        /// Maximum amount of entities, can be used for debugging
+        /// Maximum amount of entities, can be used for debugging and is optional
         #[arg(short, long)]
         limit: Option<u64>,
 
@@ -78,13 +80,58 @@ pub enum Commands {
         // #[arg(short, long, action = ArgAction::SetTrue)]
         // verbose: bool,
         /// How many requests can be "in-flight" at the same time
-        #[arg(short, long, default_value = "10")]
+        #[arg(short, long, default_value = in_flight_limit_default_as_string())]
         in_flight_limit: usize,
     },
 }
 
-#[derive(Debug, Clone, Copy, clap::ValueEnum)]
+fn in_flight_limit_default_as_string() -> String {
+    SwClient::DEFAULT_IN_FLIGHT.to_string()
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, clap::ValueEnum)]
 pub enum SyncMode {
     Import,
     Export,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::api::SwClient;
+
+    #[test]
+    fn test_basic_cli_arg_parsing() {
+        let args = vec![
+            "sw-sync-cli",
+            "sync",
+            "-m",
+            "import",
+            "--profile",
+            "my_profile.yaml",
+            "--file",
+            "./output.csv",
+        ];
+
+        let cli = match Cli::try_parse_from(args) {
+            Ok(cli) => cli,
+            Err(e) => {
+                panic!("Failed to parse cli args: {e}");
+            }
+        };
+
+        assert_eq!(
+            cli,
+            Cli {
+                command: Commands::Sync {
+                    mode: SyncMode::Import,
+                    profile: "my_profile.yaml".into(),
+                    file: "./output.csv".into(),
+                    limit: None,
+                    disable_index: false,
+                    in_flight_limit: SwClient::DEFAULT_IN_FLIGHT,
+                },
+            }
+        );
+    }
 }

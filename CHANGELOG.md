@@ -1,6 +1,12 @@
 # NEXT-RELEASE
 
 - NEXT-37504 - Fixed the generation of request criteria to support correct nested associations
+- NEXT-37318 - Added `copy-profile` command, to copy the default profiles to your system
+- NEXT-37316 - Added `index` command, to trigger the indexing of the Shopware shop
+- NEXT-37315 - Trigger indexing of the shop by default at the end of an import (can be disabled with flag `-d` `--disable-index`)
+- NEXT-37303 - [BREAKING] changed `sync` command argument `--schema` `-s` to `--profile` `-p`
+- NEXT-37303 - [BREAKING] Fixed an issue where `row` values were always provided as strings in the deserialize script. 
+               Now they are converted into their proper types before passed to the script.
 
 # v0.7.1
 
@@ -13,7 +19,7 @@
 
 # v0.6.0
 
-- Added schema / profile validation to ensure the entities + `entity_path` exists in the shop
+- Added profile validation to ensure the entities + `entity_path` exists in the shop
 
 # v0.5.0
 
@@ -32,15 +38,15 @@
 
 # v0.3.0
 
-- Added `associations` entry for schema (used on export only)
+- Added `associations` entry for profile (used on export only)
 - Implemented proper `entity_path` resolution with optional chaining `?.` for export
 - "To-One-Associations" are now exported correctly
   - The implementation for import is still missing and these fields will be ignored for now
 
 # v0.2.0
 
-- Added very basic `filter` entry for schema (used on export only)
-- Added `sort` entry for schema (used on export only)
+- Added very basic `filter` entry for profile (used on export only)
+- Added `sort` entry for profile (used on export only)
 
 # v0.1.0
 

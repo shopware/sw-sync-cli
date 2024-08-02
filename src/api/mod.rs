@@ -4,7 +4,6 @@ pub mod filter;
 
 use crate::api::filter::{Criteria, CriteriaFilter};
 use crate::config_file::Credentials;
-use anyhow::anyhow;
 use reqwest::header::{HeaderMap, HeaderValue};
 use reqwest::{header, Client, Response, StatusCode};
 use serde::{Deserialize, Serialize};
@@ -25,7 +24,7 @@ pub struct SwClient {
 }
 
 impl SwClient {
-    pub const DEFAULT_IN_FLIGHT: usize = 8;
+    pub const DEFAULT_IN_FLIGHT: usize = 10;
 
     pub async fn new(credentials: Credentials, in_flight_limit: usize) -> anyhow::Result<Self> {
         let mut default_headers = HeaderMap::default();
@@ -43,8 +42,7 @@ impl SwClient {
         let auth_response = Self::authenticate(&client, credentials.as_ref()).await?;
 
         println!(
-            "Shopware API client with in_flight_limit={} created and authenticated",
-            in_flight_limit
+            "Shopware API client with in_flight_limit={in_flight_limit} created and authenticated"
         );
         Ok(Self {
             client,
@@ -237,7 +235,7 @@ impl SwClient {
     async fn authenticate(
         client: &Client,
         credentials: &Credentials,
-    ) -> anyhow::Result<AuthResponse> {
+    ) -> Result<AuthResponse, SwApiError> {
         let response = client
             .post(format!("{}/api/oauth/token", credentials.base_url))
             .json(&AuthBody {
@@ -251,10 +249,9 @@ impl SwClient {
         if !response.status().is_success() {
             let status = response.status();
             let body: serde_json::Value = Self::deserialize(response).await?;
-            return Err(anyhow!(
-                "Failed to authenticate, got {} with body:\n{}",
+            return Err(SwApiError::AuthFailed(
                 status,
-                serde_json::to_string_pretty(&body)?
+                serde_json::to_string_pretty(&body)?,
             ));
         }
 
@@ -263,7 +260,7 @@ impl SwClient {
         Ok(res)
     }
 
-    pub async fn index(&self, skip: Vec<String>) -> anyhow::Result<()> {
+    pub async fn index(&self, skip: Vec<String>) -> Result<(), SwApiError> {
         let access_token = self.access_token.lock().unwrap().clone();
 
         let response = self
@@ -277,7 +274,7 @@ impl SwClient {
         if !response.status().is_success() {
             let status = response.status();
             let body: SwErrorBody = Self::deserialize(response).await?;
-            return Err(SwApiError::Server(status, body).into());
+            return Err(SwApiError::Server(status, body));
         }
 
         Ok(())
@@ -297,10 +294,18 @@ impl SwClient {
             let result = match serde_json::from_slice(&bytes) {
                 Ok(t) => Ok(t),
                 Err(_e) => {
-                    let body: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
-                    Err(SwApiError::DeserializeIntoSchema(
-                        serde_json::to_string_pretty(&body).unwrap(),
-                    ))
+                    // try to parse any json
+                    match serde_json::from_slice::<serde_json::Value>(&bytes) {
+                        Ok(json_value) => Err(SwApiError::DeserializeIntoSchema(
+                            std::any::type_name::<T>().to_string(),
+                            serde_json::to_string_pretty(&json_value)
+                                .expect("json pretty printing shouldn't fail"),
+                        )),
+                        Err(_e) => Err(SwApiError::DeserializeIntoSchema(
+                            std::any::type_name::<T>().to_string(),
+                            String::from_utf8_lossy(&bytes).into_owned(),
+                        )),
+                    }
                 }
             };
             worker_tx.send(result).unwrap();
@@ -355,8 +360,10 @@ pub enum SwApiError {
     Request(#[from] reqwest::Error),
     #[error("JSON error: {0}")]
     Json(#[from] serde_json::Error),
-    #[error("failed to deserialize json into schema:\n{0}")]
-    DeserializeIntoSchema(String),
+    #[error("failed to deserialize json into schema of type {0}, got:\n{1}")]
+    DeserializeIntoSchema(String, String),
+    #[error("Failed to authenticate, got {0} with body:\n{1}")]
+    AuthFailed(StatusCode, String),
 }
 
 #[derive(Debug, Deserialize, Serialize)]

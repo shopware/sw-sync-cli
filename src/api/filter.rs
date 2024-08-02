@@ -5,7 +5,9 @@ use std::collections::BTreeMap;
 
 #[derive(Debug, Serialize)]
 pub struct Criteria {
-    pub limit: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub limit: Option<usize>,
+    #[serde(skip_serializing_if = "skip_page_serialize")]
     pub page: u64,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub filter: Vec<CriteriaFilter>,
@@ -13,6 +15,10 @@ pub struct Criteria {
     pub sort: Vec<CriteriaSorting>,
     #[serde(skip_serializing_if = "BTreeMap::is_empty")]
     pub associations: BTreeMap<String, Criteria>,
+}
+
+fn skip_page_serialize(page: &u64) -> bool {
+    *page == 1
 }
 
 impl Default for Criteria {
@@ -29,7 +35,11 @@ impl Default for Criteria {
 
 impl Criteria {
     /// Maximum limit accepted by the API server
-    pub const MAX_LIMIT: u64 = 500;
+    pub const MAX_LIMIT: usize = 500;
+
+    pub fn new() -> Self {
+        Self::default()
+    }
 
     pub fn add_filter(&mut self, filter: CriteriaFilter) -> &mut Self {
         self.filter.push(filter);
@@ -45,10 +55,7 @@ impl Criteria {
         let mut current: &mut Criteria = self;
 
         for part in association_path.split('.') {
-            current = current
-                .associations
-                .entry(part.to_string())
-                .or_insert_with(Criteria::default);
+            current = current.associations.entry(part.to_string()).or_default();
         }
 
         self
@@ -69,7 +76,7 @@ pub enum CriteriaSortingOrder {
     Descending,
 }
 
-/// See https://developer.shopware.com/docs/resources/references/core-reference/dal-reference/filters-reference.html
+/// See <https://developer.shopware.com/docs/resources/references/core-reference/dal-reference/filters-reference.html>
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "camelCase")]
 pub enum CriteriaFilter {
@@ -161,19 +168,11 @@ mod tests {
   "page": 2,
   "associations": {
     "cover": {
-      "limit": null,
-      "page": 1,
       "associations": {
-        "media": {
-          "limit": null,
-          "page": 1
-        }
+        "media": {}
       }
     },
-    "manufacturer": {
-      "limit": null,
-      "page": 1
-    }
+    "manufacturer": {}
   }
 }"#
         );
@@ -181,11 +180,7 @@ mod tests {
 
     #[test]
     fn criteria_serialize_sorting() {
-        let mut criteria = Criteria {
-            limit: Some(10),
-            page: 2,
-            ..Default::default()
-        };
+        let mut criteria = Criteria::new();
         criteria.add_sorting(CriteriaSorting {
             field: "manufacturerId".to_string(),
             order: CriteriaSortingOrder::Descending,
@@ -195,8 +190,6 @@ mod tests {
         assert_eq!(
             json,
             r#"{
-  "limit": 10,
-  "page": 2,
   "sort": [
     {
       "field": "manufacturerId",

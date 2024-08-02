@@ -74,7 +74,7 @@ jobs:
     - uses: Swatinem/rust-cache@v2
 
     - name: Final cargo test
-      run: cargo test --verbose --all-features
+      run: cargo test --verbose --all-features --no-fail-fast
 
     - name: Run cargo build
       run: cargo build --release --verbose
