@@ -112,7 +112,7 @@ jobs:
                   body: comment,
               });
           } else {
-              core.log(comment);
+              console.log(comment);
           }
 
   rustfmt:
