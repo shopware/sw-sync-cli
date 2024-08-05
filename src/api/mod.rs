@@ -4,29 +4,25 @@ pub mod filter;
 
 use crate::api::filter::{Criteria, CriteriaFilter};
 use crate::config_file::Credentials;
+use reqwest::blocking::{Client, Response};
 use reqwest::header::{HeaderMap, HeaderValue};
-use reqwest::{header, Client, Response, StatusCode};
+use reqwest::{header, StatusCode};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::fmt::Debug;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 use thiserror::Error;
-use tokio::sync::Semaphore;
 
 #[derive(Debug, Clone)]
 pub struct SwClient {
     client: Client,
-    /// Limits the number of "in-flight" requests
-    in_flight_semaphore: Arc<Semaphore>,
     credentials: Arc<Credentials>,
     access_token: Arc<Mutex<String>>,
 }
 
 impl SwClient {
-    pub const DEFAULT_IN_FLIGHT: usize = 10;
-
-    pub async fn new(credentials: Credentials, in_flight_limit: usize) -> anyhow::Result<Self> {
+    pub fn new(credentials: Credentials) -> anyhow::Result<Self> {
         let mut default_headers = HeaderMap::default();
         // This header is needed, otherwise the response would be "application/vnd.api+json" (by default)
         // and that doesn't have the association data as part of the entity object
@@ -39,20 +35,17 @@ impl SwClient {
             .default_headers(default_headers)
             .build()?;
         let credentials = Arc::new(credentials);
-        let auth_response = Self::authenticate(&client, credentials.as_ref()).await?;
+        let auth_response = Self::authenticate(&client, credentials.as_ref())?;
 
-        println!(
-            "Shopware API client with in_flight_limit={in_flight_limit} created and authenticated"
-        );
+        println!("Shopware API client created and authenticated");
         Ok(Self {
             client,
-            in_flight_semaphore: Arc::new(Semaphore::new(in_flight_limit)),
             credentials,
             access_token: Arc::new(Mutex::new(auth_response.access_token)),
         })
     }
 
-    pub async fn sync<S: Into<String>, T: Serialize>(
+    pub fn sync<S: Into<String>, T: Serialize>(
         &self,
         entity: S,
         action: SyncAction,
@@ -70,7 +63,6 @@ impl SwClient {
         };
 
         let response = {
-            let _lock = self.in_flight_semaphore.acquire().await.unwrap();
             let start_instant = Instant::now();
             println!(
                 "sync {:?} '{}' with payload size {}",
@@ -86,8 +78,7 @@ impl SwClient {
                 .header("indexing-behavior", "disable-indexing")
                 .header("sw-skip-trigger-flow", 1)
                 .json(&body)
-                .send()
-                .await?;
+                .send()?;
             println!(
                 "sync request finished after {} ms",
                 start_instant.elapsed().as_millis()
@@ -97,43 +88,37 @@ impl SwClient {
 
         if !response.status().is_success() {
             let status = response.status();
-            let body: SwErrorBody = Self::deserialize(response).await?;
+            let body: SwErrorBody = Self::deserialize(response)?;
             return Err(SwApiError::Server(status, body));
         }
 
         Ok(())
     }
 
-    pub async fn entity_schema(&self) -> Result<Entity, SwApiError> {
+    pub fn entity_schema(&self) -> Result<Entity, SwApiError> {
         // ToDo: implement retry on auth fail
         let access_token = self.access_token.lock().unwrap().clone();
         let response = {
-            let _lock = self.in_flight_semaphore.acquire().await.unwrap();
             self.client
                 .get(format!(
                     "{}/api/_info/entity-schema.json",
                     self.credentials.base_url
                 ))
                 .bearer_auth(access_token)
-                .send()
-                .await?
+                .send()?
         };
 
         if !response.status().is_success() {
             let status = response.status();
-            let body: SwErrorBody = Self::deserialize(response).await?;
+            let body: SwErrorBody = Self::deserialize(response)?;
             return Err(SwApiError::Server(status, body));
         }
 
-        let value = Self::deserialize(response).await?;
+        let value = Self::deserialize(response)?;
         Ok(value)
     }
 
-    pub async fn get_total(
-        &self,
-        entity: &str,
-        filter: &[CriteriaFilter],
-    ) -> Result<u64, SwApiError> {
+    pub fn get_total(&self, entity: &str, filter: &[CriteriaFilter]) -> Result<u64, SwApiError> {
         // entity needs to be provided as kebab-case instead of snake_case
         let entity = entity.replace('_', "-");
 
@@ -141,7 +126,6 @@ impl SwClient {
         let access_token = self.access_token.lock().unwrap().clone();
 
         let response = {
-            let _lock = self.in_flight_semaphore.acquire().await.unwrap();
             self.client
                 .post(format!(
                     "{}/api/search/{}",
@@ -159,17 +143,16 @@ impl SwClient {
                         }
                     ]
                 }))
-                .send()
-                .await?
+                .send()?
         };
 
         if !response.status().is_success() {
             let status = response.status();
-            let body: SwErrorBody = Self::deserialize(response).await?;
+            let body: SwErrorBody = Self::deserialize(response)?;
             return Err(SwApiError::Server(status, body));
         }
 
-        let value: serde_json::Value = Self::deserialize(response).await?;
+        let value: serde_json::Value = Self::deserialize(response)?;
 
         let count = value
             .pointer("/aggregations/count/count")
@@ -181,18 +164,13 @@ impl SwClient {
         Ok(count)
     }
 
-    pub async fn list(
-        &self,
-        entity: &str,
-        criteria: &Criteria,
-    ) -> Result<SwListResponse, SwApiError> {
+    pub fn list(&self, entity: &str, criteria: &Criteria) -> Result<SwListResponse, SwApiError> {
         // entity needs to be provided as kebab-case instead of snake_case
         let entity = entity.replace('_', "-");
 
         // ToDo: implement retry on auth fail
         let access_token = self.access_token.lock().unwrap().clone();
         let response = {
-            let _lock = self.in_flight_semaphore.acquire().await.unwrap();
             let start_instant = Instant::now();
 
             if let Some(limit) = criteria.limit {
@@ -212,8 +190,7 @@ impl SwClient {
                 ))
                 .bearer_auth(access_token)
                 .json(criteria)
-                .send()
-                .await?;
+                .send()?;
             println!(
                 "search request finished after {} ms",
                 start_instant.elapsed().as_millis()
@@ -223,16 +200,16 @@ impl SwClient {
 
         if !response.status().is_success() {
             let status = response.status();
-            let body: SwErrorBody = Self::deserialize(response).await?;
+            let body: SwErrorBody = Self::deserialize(response)?;
             return Err(SwApiError::Server(status, body));
         }
 
-        let value: SwListResponse = Self::deserialize(response).await?;
+        let value: SwListResponse = Self::deserialize(response)?;
 
         Ok(value)
     }
 
-    async fn authenticate(
+    fn authenticate(
         client: &Client,
         credentials: &Credentials,
     ) -> Result<AuthResponse, SwApiError> {
@@ -243,24 +220,23 @@ impl SwClient {
                 client_id: credentials.access_key_id.clone(),
                 client_secret: credentials.access_key_secret.clone(),
             })
-            .send()
-            .await?;
+            .send()?;
 
         if !response.status().is_success() {
             let status = response.status();
-            let body: serde_json::Value = Self::deserialize(response).await?;
+            let body: serde_json::Value = Self::deserialize(response)?;
             return Err(SwApiError::AuthFailed(
                 status,
                 serde_json::to_string_pretty(&body)?,
             ));
         }
 
-        let res = Self::deserialize(response).await?;
+        let res = Self::deserialize(response)?;
 
         Ok(res)
     }
 
-    pub async fn index(&self, skip: Vec<String>) -> Result<(), SwApiError> {
+    pub fn index(&self, skip: Vec<String>) -> Result<(), SwApiError> {
         let access_token = self.access_token.lock().unwrap().clone();
 
         let response = self
@@ -268,49 +244,42 @@ impl SwClient {
             .post(format!("{}/api/_action/index", self.credentials.base_url))
             .bearer_auth(access_token)
             .json(&IndexBody { skip })
-            .send()
-            .await?;
+            .send()?;
 
         if !response.status().is_success() {
             let status = response.status();
-            let body: SwErrorBody = Self::deserialize(response).await?;
+            let body: SwErrorBody = Self::deserialize(response)?;
             return Err(SwApiError::Server(status, body));
         }
 
         Ok(())
     }
 
-    async fn deserialize<T>(response: Response) -> Result<T, SwApiError>
+    fn deserialize<T>(response: Response) -> Result<T, SwApiError>
     where
         T: for<'a> Deserialize<'a> + Debug + Send + 'static,
     {
-        let bytes = response.bytes().await?;
+        let bytes = response.bytes()?;
 
-        // offload heavy deserialization (shopware json responses can get big) to worker thread
-        // to not block this thread for too long doing async work
-        let (worker_tx, worker_rx) = tokio::sync::oneshot::channel::<Result<T, SwApiError>>();
-        rayon::spawn(move || {
-            // expensive for lage json objects
-            let result = match serde_json::from_slice(&bytes) {
-                Ok(t) => Ok(t),
-                Err(_e) => {
-                    // try to parse any json
-                    match serde_json::from_slice::<serde_json::Value>(&bytes) {
-                        Ok(json_value) => Err(SwApiError::DeserializeIntoSchema(
-                            std::any::type_name::<T>().to_string(),
-                            serde_json::to_string_pretty(&json_value)
-                                .expect("json pretty printing shouldn't fail"),
-                        )),
-                        Err(_e) => Err(SwApiError::DeserializeIntoSchema(
-                            std::any::type_name::<T>().to_string(),
-                            String::from_utf8_lossy(&bytes).into_owned(),
-                        )),
-                    }
+        // expensive for large json objects
+        let result = match serde_json::from_slice(&bytes) {
+            Ok(t) => Ok(t),
+            Err(_e) => {
+                // try to parse any json
+                match serde_json::from_slice::<serde_json::Value>(&bytes) {
+                    Ok(json_value) => Err(SwApiError::DeserializeIntoSchema(
+                        std::any::type_name::<T>().to_string(),
+                        serde_json::to_string_pretty(&json_value)
+                            .expect("json pretty printing shouldn't fail"),
+                    )),
+                    Err(_e) => Err(SwApiError::DeserializeIntoSchema(
+                        std::any::type_name::<T>().to_string(),
+                        String::from_utf8_lossy(&bytes).into_owned(),
+                    )),
                 }
-            };
-            worker_tx.send(result).unwrap();
-        });
-        worker_rx.await.unwrap()
+            }
+        };
+        result
     }
 }
 

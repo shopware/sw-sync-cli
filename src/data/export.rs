@@ -6,9 +6,8 @@ use crate::data::transform::serialize_entity;
 use crate::SyncContext;
 use std::cmp;
 use std::sync::Arc;
-use tokio::task::JoinHandle;
 
-pub async fn export(context: Arc<SyncContext>) -> anyhow::Result<()> {
+pub fn export(context: Arc<SyncContext>) -> anyhow::Result<()> {
     if !context.associations.is_empty() {
         println!("Using associations: {:#?}", context.associations);
     }
@@ -24,8 +23,7 @@ pub async fn export(context: Arc<SyncContext>) -> anyhow::Result<()> {
     // retrieve total entity count from shopware and calculate chunk count
     let mut total = context
         .sw_client
-        .get_total(&context.profile.entity, &context.profile.filter)
-        .await?;
+        .get_total(&context.profile.entity, &context.profile.filter)?;
 
     if let Some(limit) = context.limit {
         total = cmp::min(limit, total);
@@ -41,41 +39,48 @@ pub async fn export(context: Arc<SyncContext>) -> anyhow::Result<()> {
         total, context.profile.entity, chunk_limit, chunk_count
     );
 
-    // submit request tasks
-    #[allow(clippy::type_complexity)]
-    let mut request_tasks: Vec<JoinHandle<anyhow::Result<(u64, Vec<Vec<String>>)>>> = vec![];
+    // spawn writer thread
+    let (writer_tx, rx) = std::sync::mpsc::channel();
+    let context_clone = Arc::clone(&context);
+    let writer = std::thread::spawn(move || write_to_file_worker(rx, &context_clone));
 
-    for i in 0..chunk_count {
-        let page = i + 1;
+    // Spawn a thread into the thread pool (rayon) for each chunk.
+    // fails on first encountered error
+    rayon::scope_fifo(|s| {
+        for i in 0..chunk_count {
+            let context = Arc::clone(&context);
+            let writer_tx = std::sync::mpsc::Sender::clone(&writer_tx);
+            s.spawn_fifo(move |_| {
+                // Unwrap on failure is fine here for now:
+                // if something goes wrong during export, this will panic the thread
+                // and that panic will bubble up to the main thread
+                // We might re-evaluate this with the ticket: ToDo NEXT-37312
 
-        let context = Arc::clone(&context);
-        request_tasks.push(tokio::spawn(async move {
-            let response = send_request(page, chunk_limit, &context).await?;
+                let page = i + 1;
+                println!("processing page {page}...");
 
-            // move actual response processing / deserialization to worker thread pool
-            // and wait for it to finish
-            let (worker_tx, worker_rx) =
-                tokio::sync::oneshot::channel::<anyhow::Result<(u64, Vec<Vec<String>>)>>();
+                let response = send_request(page, chunk_limit, &context).unwrap();
+                let result = process_response(page, chunk_limit, response, &context).unwrap();
 
-            rayon::spawn(move || {
-                let result = process_response(page, chunk_limit, response, &context);
-                worker_tx.send(result).unwrap();
+                // submit data to file writer thread
+                writer_tx.send(result).unwrap();
+                println!("processed page {page}");
             });
+        }
+        drop(writer_tx);
+    });
 
-            worker_rx.await?
-        }));
-    }
-
-    // wait for all tasks to finish, one after the other, in order,
-    // and write them to the target file (blocking IO)
-    tokio::task::spawn_blocking(|| async move { write_to_file(request_tasks, &context).await })
-        .await?
-        .await?;
+    // wait for the writer thread to finish writing to the CSV file
+    // Safety:
+    // it's fine to unwrap here, because failure would mean a panic inside the thread,
+    // thus panicking the main thread is acceptable
+    // Note: we still handle the returned result gracefully and bubble up the error in that case
+    writer.join().unwrap()?;
 
     Ok(())
 }
 
-async fn send_request(
+fn send_request(
     page: u64,
     chunk_limit: usize,
     context: &SyncContext,
@@ -92,10 +97,7 @@ async fn send_request(
         criteria.add_association(association);
     }
 
-    let response = context
-        .sw_client
-        .list(&context.profile.entity, &criteria)
-        .await?;
+    let response = context.sw_client.list(&context.profile.entity, &criteria)?;
 
     Ok(response)
 }
@@ -117,8 +119,8 @@ fn process_response(
 }
 
 #[allow(clippy::type_complexity)]
-async fn write_to_file(
-    worker_handles: Vec<JoinHandle<anyhow::Result<(u64, Vec<Vec<String>>)>>>,
+fn write_to_file_worker(
+    rx: std::sync::mpsc::Receiver<(u64, Vec<Vec<String>>)>,
     context: &SyncContext,
 ) -> anyhow::Result<()> {
     let mut csv_writer = csv::WriterBuilder::new()
@@ -128,13 +130,27 @@ async fn write_to_file(
     // writer header line
     csv_writer.write_record(get_header_line(context))?;
 
-    for handle in worker_handles {
-        // ToDo: we might want to handle the errors more gracefully here and don't stop on first error
-        let (page, rows) = handle.await??;
-        println!("writing page {page}");
+    // buffer incoming (page, chunk) messages, to process them in order
+    let mut buffer = vec![];
+    let mut next_page = 1;
+    while let Ok(msg) = rx.recv() {
+        buffer.push(msg);
 
-        for row in rows {
-            csv_writer.write_record(row)?;
+        buffer.sort_unstable_by(|a, b| b.0.cmp(&a.0));
+        loop {
+            match buffer.last() {
+                Some(m) if m.0 == next_page => {}
+                _ => break,
+            }
+
+            // got the next page, so write it
+            let (page, rows) = buffer.remove(buffer.len() - 1);
+            println!("writing page {page}");
+
+            for row in rows {
+                csv_writer.write_record(row)?;
+            }
+            next_page += 1;
         }
     }
 

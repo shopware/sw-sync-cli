@@ -7,95 +7,100 @@ use crate::SyncContext;
 use csv::StringRecord;
 use itertools::Itertools;
 use std::sync::Arc;
-use tokio::task::JoinHandle;
 
-/// will do blocking file IO, so should be used with `task::spawn_blocking`
 pub fn import(context: Arc<SyncContext>) -> anyhow::Result<()> {
     let mut csv_reader = csv::ReaderBuilder::new()
         .delimiter(b';')
         .from_path(&context.file)?;
     let headers = csv_reader.headers()?.clone();
-
-    // create an iterator, that processes (CSV) rows (StringRecord) into (usize, StringRecord)
-    // where the former is the row index
-    let iter = csv_reader
+    let chunked_iter = csv_reader
         .into_records()
-        .map(|result| match result {
-            Ok(record) => record,
-            Err(e) => {
-                panic!("failed to read CSV record: {e}");
-            }
-        })
         .enumerate()
-        .take(
-            usize::try_from(context.limit.unwrap_or(u64::MAX))
-                .expect("64 bit system wide pointers or values smaller than usize"),
-        );
+        // limit how much CSV rows get loaded into memory at once (one file chunk)
+        .chunks(Criteria::MAX_LIMIT * context.in_flight_limit * 2);
 
-    // iterate in chunks of Criteria::MAX_LIMIT or less
-    let mut join_handles: Vec<JoinHandle<anyhow::Result<()>>> = vec![];
-    for sync_values in &iter.chunks(Criteria::MAX_LIMIT) {
-        let (row_indices, records_chunk): (Vec<usize>, Vec<StringRecord>) = sync_values.unzip();
+    // process one big file chunk of a potentially big CSV file at a time
+    for file_chunk in &chunked_iter {
+        let file_chunk: Vec<(usize, Result<StringRecord, csv::Error>)> = file_chunk.collect();
+        let first_index = file_chunk.first().map_or(0, |t| t.0);
+        let last_index = file_chunk.last().map_or(0, |t| t.0);
+        let chunk_length = file_chunk.len();
 
-        // ToDo: we might want to wait here instead of processing the whole CSV file
-        // and then only waiting on the processing / sync requests to finish
-
-        // submit task
-        let context = Arc::clone(&context);
-        let headers = headers.clone();
-        join_handles.push(tokio::spawn(async move {
-            let entity_chunk = process_chunk(headers, records_chunk, &context).await?;
-
-            sync_chunk(&row_indices, entity_chunk, &context).await
-        }));
+        println!("file chunk {first_index}..={last_index} (size={chunk_length}) was read from CSV into memory");
+        process_file_chunk(&headers, file_chunk, &context)?;
+        println!("file chunk {first_index}..={last_index} (size={chunk_length}) finished and cleared from memory");
     }
-
-    // wait for all the tasks to finish
-    tokio::runtime::Handle::current().block_on(async {
-        for join_handle in join_handles {
-            join_handle.await??;
-        }
-        Ok::<(), anyhow::Error>(())
-    })?;
 
     Ok(())
 }
 
-/// deserialize chunk on worker thread
-/// and wait for it to finish
-async fn process_chunk(
-    headers: StringRecord,
-    records_chunk: Vec<StringRecord>,
+fn process_file_chunk(
+    headers: &StringRecord,
+    file_chunk: Vec<(usize, Result<StringRecord, csv::Error>)>,
     context: &Arc<SyncContext>,
-) -> anyhow::Result<Vec<Entity>> {
-    println!("deserialize chunk");
-    let context = Arc::clone(context);
-    let (worker_tx, worker_rx) = tokio::sync::oneshot::channel::<anyhow::Result<Vec<Entity>>>();
-    rayon::spawn(move || {
-        let mut entities: Vec<Entity> = Vec::with_capacity(Criteria::MAX_LIMIT);
-        for record in records_chunk {
-            let entity = match deserialize_row(
-                &headers,
-                &record,
-                &context.profile,
-                &context.scripting_environment,
-            ) {
-                Ok(e) => e,
-                Err(e) => {
-                    worker_tx.send(Err(e)).unwrap();
-                    return;
-                }
-            };
+) -> anyhow::Result<()> {
+    rayon::scope_fifo(|s| {
+        // split the big file_chunk into smaller chunks that fit in single sync requests
+        // and iterate over them, spawning a processing tasks for each sync chunk
+        let chunked_iter = file_chunk.into_iter().chunks(Criteria::MAX_LIMIT);
+        for chunk in &chunked_iter {
+            let (row_indices, records_chunk): (Vec<usize>, Vec<Result<StringRecord, csv::Error>>) =
+                chunk.unzip();
+            let first_index = *row_indices.first().unwrap_or(&0);
+            let last_index = *row_indices.last().unwrap_or(&0);
+            let chunk_length = records_chunk.len();
 
-            entities.push(entity);
+            let context_clone = Arc::clone(context);
+            let headers = &headers;
+            s.spawn_fifo(move |_| {
+                println!("sync chunk {first_index}..={last_index} (size={chunk_length}) is now being deserialized");
+                let entity_chunk = match deserialize_chunk(headers, records_chunk, &context_clone) {
+                    Ok(chunk) => chunk,
+                    Err(e) => {
+                        println!("sync chunk {first_index}..={last_index} (size={chunk_length}) failed to deserialize:\n{e}");
+                        return;
+                    }
+                };
+
+                println!("sync chunk {first_index}..={last_index} (size={chunk_length}) is now being synced to shopware");
+                if let Err(e) = sync_chunk(&row_indices, entity_chunk, &context_clone) {
+                    println!("sync chunk {first_index}..={last_index} (size={chunk_length}) failed to be synced over API:\n{e}");
+                }
+            });
         }
 
-        worker_tx.send(Ok(entities)).unwrap();
-    });
-    worker_rx.await?
+        Ok(())
+    })
 }
 
-async fn sync_chunk(
+fn deserialize_chunk(
+    headers: &StringRecord,
+    records_chunk: Vec<Result<StringRecord, csv::Error>>,
+    context: &Arc<SyncContext>,
+) -> anyhow::Result<Vec<Entity>> {
+    let mut entities: Vec<Entity> = Vec::with_capacity(Criteria::MAX_LIMIT);
+    for record in records_chunk {
+        let record = record?; // fail on first CSV read failure
+
+        let entity = match deserialize_row(
+            headers,
+            &record,
+            &context.profile,
+            &context.scripting_environment,
+        ) {
+            Ok(e) => e,
+            Err(e) => {
+                return Err(e);
+            }
+        };
+
+        entities.push(entity);
+    }
+
+    Ok(entities)
+}
+
+fn sync_chunk(
     row_indices: &[usize],
     mut chunk: Vec<Entity>,
     context: &Arc<SyncContext>,
@@ -103,7 +108,6 @@ async fn sync_chunk(
     match context
         .sw_client
         .sync(&context.profile.entity, SyncAction::Upsert, &chunk)
-        .await
     {
         Ok(()) => Ok(()),
         Err(SwApiError::Server(_, error_body)) => {
@@ -112,8 +116,7 @@ async fn sync_chunk(
             // retry
             context
                 .sw_client
-                .sync(&context.profile.entity, SyncAction::Upsert, &chunk)
-                .await?;
+                .sync(&context.profile.entity, SyncAction::Upsert, &chunk)?;
             Ok(())
         }
         Err(e) => Err(e.into()),

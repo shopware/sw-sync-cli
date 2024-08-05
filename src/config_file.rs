@@ -37,9 +37,8 @@ pub struct Credentials {
 }
 
 impl Credentials {
-    pub async fn read_credentials() -> anyhow::Result<Self> {
-        let serialized_credentials = tokio::fs::read_to_string("./.credentials.toml")
-            .await
+    pub fn read_credentials() -> anyhow::Result<Self> {
+        let serialized_credentials = std::fs::read_to_string("./.credentials.toml")
             .context("No .credentials.toml found. Call command auth first.")?;
 
         let credentials: Self = toml::from_str(&serialized_credentials)?;
@@ -71,10 +70,9 @@ pub struct Profile {
 }
 
 impl Profile {
-    pub async fn read_profile(profile_path: impl AsRef<Path>) -> anyhow::Result<Self> {
-        let serialized_profile = tokio::fs::read_to_string(profile_path)
-            .await
-            .context("Provided profile file not found")?;
+    pub fn read_profile(profile_path: impl AsRef<Path>) -> anyhow::Result<Self> {
+        let serialized_profile =
+            std::fs::read_to_string(profile_path).context("Provided profile file not found")?;
 
         let profile: Self = serde_yaml::from_str(&serialized_profile)?;
         Ok(profile)
