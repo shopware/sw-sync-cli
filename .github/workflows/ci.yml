@@ -50,6 +50,13 @@ jobs:
           name: coverage-html-report
           path: target/llvm-cov/html/
 
+      - name: Delete old coverage comments
+        uses: izhangzhihao/delete-comment@master
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          delete_user_name: github-actions[bot]
+          issue_number: ${{ github.event.number }}
+
       - uses: actions/github-script@v7
         env:
           ARTIFACT_URL: "${{steps.coverage_upload.outputs.artifact-url}}"
