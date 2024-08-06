@@ -4,13 +4,13 @@
 # Copyright (c) 2024 Malte Janz
 # Copyright (c) 2024 shopware AG
 
+name: Create and deploy release
+
 on:
   push:
     # Sequence of patterns matched against refs/tags
     tags:
-      - 'v*' # Push events to matching v*, i.e. v1.0, v20.15.10
-
-name: Create and deploy release
+      - "v*" # Push events to matching v*, i.e. v1.0, v20.15.10
 
 env:
   # Could, potentially automatically parse
@@ -25,7 +25,6 @@ env:
   # Name of the docker image
   CONTAINER_IMG_NAME: "maltejanz/sw-sync-cli"
 
-
 jobs:
   tag_version:
     name: Get the version from tag
@@ -38,7 +37,6 @@ jobs:
         id: get_version
         shell: bash
         run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
-
 
   build:
     name: Build artifacts
@@ -66,47 +64,46 @@ jobs:
             output_ending: .zip
 
     steps:
-    - uses: actions/checkout@v4
-    
-    - name: Install latest stable Rust version
-      uses: dtolnay/rust-toolchain@stable
+      - uses: actions/checkout@v4
 
-    - uses: Swatinem/rust-cache@v2
+      - name: Install latest stable Rust version
+        uses: dtolnay/rust-toolchain@stable
 
-    - name: Final cargo test
-      run: cargo test --verbose --all-features --no-fail-fast
+      - uses: Swatinem/rust-cache@v2
 
-    - name: Run cargo build
-      run: cargo build --release --verbose
+      - name: Final cargo test
+        run: cargo test --verbose --all-features --no-fail-fast
 
-    - name: Create artifact directory
-      run: mkdir artifacts
+      - name: Run cargo build
+        run: cargo build --release --verbose
 
-    - name: Create archive for Windows
-      run: 7z a -tzip ./artifacts/${{ env.RELEASE_BIN }}-${{ needs.tag_version.outputs.version }}-${{ matrix.build }}${{ matrix.output_ending }} ./target/release/${{ env.RELEASE_BIN }}.exe ${{ env.RELEASE_ADDS }}
-      if: matrix.os == 'windows-latest'
+      - name: Create artifact directory
+        run: mkdir artifacts
 
-    - name: Create archive for Linux
-      run: 7z a -ttar -so -an ./target/release/${{ env.RELEASE_BIN }} ${{ env.RELEASE_ADDS }} | 7z a -tgzip -si ./artifacts/${{ env.RELEASE_BIN }}-${{ needs.tag_version.outputs.version }}-${{ matrix.build }}${{ matrix.output_ending }}
-      if: matrix.os == 'ubuntu-latest'
+      - name: Create archive for Windows
+        run: 7z a -tzip ./artifacts/${{ env.RELEASE_BIN }}-${{ needs.tag_version.outputs.version }}-${{ matrix.build }}${{ matrix.output_ending }} ./target/release/${{ env.RELEASE_BIN }}.exe ${{ env.RELEASE_ADDS }}
+        if: matrix.os == 'windows-latest'
 
-    # should not be needed anymore
-    #- name: Install p7zip on MacOS
+      - name: Create archive for Linux
+        run: 7z a -ttar -so -an ./target/release/${{ env.RELEASE_BIN }} ${{ env.RELEASE_ADDS }} | 7z a -tgzip -si ./artifacts/${{ env.RELEASE_BIN }}-${{ needs.tag_version.outputs.version }}-${{ matrix.build }}${{ matrix.output_ending }}
+        if: matrix.os == 'ubuntu-latest'
+
+      # should not be needed anymore
+      #- name: Install p7zip on MacOS
       # 7Zip not available on MacOS, install p7zip via homebrew.
-    #  run: brew install p7zip
-    #  if: matrix.os == 'macos-latest' || matrix.os == 'macos-14'
-    
-    - name: Create archive for MacOS
-      run: 7z a -ttar -so -an ./target/release/${{ env.RELEASE_BIN }} ${{ env.RELEASE_ADDS }} | 7z a -tgzip -si ./artifacts/${{ env.RELEASE_BIN }}-${{ needs.tag_version.outputs.version }}-${{ matrix.build }}${{ matrix.output_ending }}
-      if: matrix.os == 'macos-latest' || matrix.os == 'macos-14'
+      #  run: brew install p7zip
+      #  if: matrix.os == 'macos-latest' || matrix.os == 'macos-14'
 
-    - name: Upload artifact
-      uses: actions/upload-artifact@v4
-      with:
-        path: artifacts/*
-        name: executable-${{ matrix.build }}
-        if-no-files-found: error
+      - name: Create archive for MacOS
+        run: 7z a -ttar -so -an ./target/release/${{ env.RELEASE_BIN }} ${{ env.RELEASE_ADDS }} | 7z a -tgzip -si ./artifacts/${{ env.RELEASE_BIN }}-${{ needs.tag_version.outputs.version }}-${{ matrix.build }}${{ matrix.output_ending }}
+        if: matrix.os == 'macos-latest' || matrix.os == 'macos-14'
 
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          path: artifacts/*
+          name: executable-${{ matrix.build }}
+          if-no-files-found: error
 
   github_draft_release:
     name: Create GitHub draft release
@@ -131,7 +128,6 @@ jobs:
           prerelease: false
           files: |
             artifacts/*
-
 
   publish_crate:
     name: Publish to crates.io
