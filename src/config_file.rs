@@ -17,10 +17,6 @@ pub const DEFAULT_PROFILES: &[(&str, &str)] = &[
         include_str!("../profiles/default_advanced_price.yaml"),
     ),
     (
-        "default_category.yaml",
-        include_str!("../profiles/default_category.yaml"),
-    ),
-    (
         "default_cross_selling.yaml",
         include_str!("../profiles/default_cross_selling.yaml"),
     ),
@@ -151,7 +147,7 @@ pub struct EntityScriptMapping {
 mod tests {
     use super::*;
     use crate::api::Entity;
-    use crate::data::validate_paths_for_entity;
+    use crate::data::{prepare_scripting_environment, validate_paths_for_entity};
 
     #[test]
     fn all_default_profiles_should_be_included() {
@@ -192,6 +188,7 @@ mod tests {
         let raw_schema_content =
             std::fs::read_to_string("./fixtures/entity-schema-2024-08-01.json")
                 .expect("failed to read entity-schema fixture");
+
         let api_schema: Entity = serde_json::from_str(&raw_schema_content)
             .expect("failed to parse entity-schema fixture");
 
@@ -204,6 +201,12 @@ mod tests {
             validate_paths_for_entity(&profile.entity, &profile.mappings, &api_schema).expect(
                 &format!("failed to validate entity path's for default profile {profile_filename}"),
             );
+
+            // compile serialize & deserialize scripts
+            prepare_scripting_environment(&profile.serialize_script, &profile.deserialize_script)
+                .expect(&format!(
+                    "failed to compile scripts in default profile {profile_filename}"
+                ));
         }
     }
 }
