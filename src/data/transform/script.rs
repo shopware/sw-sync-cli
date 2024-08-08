@@ -1,6 +1,6 @@
 //! Everything scripting related
 
-use crate::api::Entity;
+use crate::api::{Entity, IsoLanguageList};
 use crate::config_file::{Mapping, Profile};
 use crate::data::transform::get_json_value_from_string;
 use anyhow::Context;
@@ -103,8 +103,9 @@ impl ScriptingEnvironment {
 pub fn prepare_scripting_environment(
     raw_serialize_script: &str,
     raw_deserialize_script: &str,
+    language_list: IsoLanguageList,
 ) -> anyhow::Result<ScriptingEnvironment> {
-    let engine = get_base_engine();
+    let engine = get_base_engine(language_list);
     let serialize_ast = if raw_serialize_script.is_empty() {
         None
     } else {
@@ -129,7 +130,7 @@ pub fn prepare_scripting_environment(
     })
 }
 
-fn get_base_engine() -> Engine {
+fn get_base_engine(language_list: IsoLanguageList) -> Engine {
     let mut engine = Engine::new_raw();
     engine.set_optimization_level(OptimizationLevel::Full);
 
@@ -149,8 +150,12 @@ fn get_base_engine() -> Engine {
     let array_package = BasicArrayPackage::new();
     array_package.register_into_engine(&mut engine);
 
-    // ToDo: add custom utility functions to engine
+    // Add custom utility functions to engine
     engine.register_fn("get_default", inside_script::get_default);
+
+    engine.register_fn("get_language_by_iso", move |iso: &str| {
+        language_list.get_language_id_by_iso_code(iso)
+    });
 
     // Some reference implementations below
     /*
@@ -214,6 +219,25 @@ mod tests {
     use crate::config_file::EntityScriptMapping;
     use rhai::Dynamic;
     use serde_json::json;
+    use std::collections::HashMap;
+
+    fn create_language_iso_list() -> IsoLanguageList {
+        let mut language_list_inner: HashMap<String, String> = HashMap::new();
+        language_list_inner.insert(
+            "de-DE".to_string(),
+            "cf8eb267dd2a4c54be07bf4b50d65ab5".to_string(),
+        );
+        language_list_inner.insert(
+            "en-GB".to_string(),
+            "a13966f91ef24dcabccf1668e3618955".to_string(),
+        );
+
+        let locale_list = IsoLanguageList {
+            data: language_list_inner,
+        };
+
+        locale_list
+    }
 
     #[test]
     fn test_basic_serialize() {
@@ -226,6 +250,7 @@ mod tests {
             r#"
             // deserialize
         "#,
+            create_language_iso_list(),
         )
         .unwrap();
 
@@ -251,6 +276,8 @@ mod tests {
 
     #[test]
     fn test_basic_deserialize() {
+        let iso_list = create_language_iso_list();
+
         let script_env = prepare_scripting_environment(
             r#"
             // serialize
@@ -260,7 +287,9 @@ mod tests {
             entity["fiz"] = row["bar_key"];
             entity["number"] = row["number_plus_one"] - 1;
             entity["currencyId"] = get_default("CURRENCY");
+            entity["languageId"] = get_language_by_iso("de-DE");
         "#,
+            iso_list.clone(),
         )
         .unwrap();
 
@@ -291,6 +320,7 @@ mod tests {
                 "fiz": "buzz",
                 "number": 42,
                 "currencyId": inside_script::get_default("CURRENCY"),
+                "languageId": iso_list.get_language_id_by_iso_code("de-DE"),
             }))
             .unwrap()
         );

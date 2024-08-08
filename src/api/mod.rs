@@ -9,6 +9,7 @@ use reqwest::header::{HeaderMap, HeaderValue};
 use reqwest::{header, StatusCode};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
+use std::collections::HashMap;
 use std::fmt::Debug;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
@@ -42,6 +43,44 @@ impl SwClient {
             client,
             credentials,
             access_token: Arc::new(Mutex::new(auth_response.access_token)),
+        })
+    }
+
+    pub fn get_languages(&self) -> Result<IsoLanguageList, SwApiError> {
+        let mut page = 1;
+        let mut language_list: HashMap<String, String> = HashMap::new();
+
+        let total = self.get_total("language", &[])?;
+
+        let access_token = self.access_token.lock().unwrap().clone();
+        while language_list.len() < total as usize {
+            let mut criteria = Criteria {
+                page,
+                limit: Some(Criteria::MAX_LIMIT),
+                fields: vec!["id".to_string(), "locale.code".to_string()],
+                ..Default::default()
+            };
+
+            criteria.add_association("locale");
+
+            let response = {
+                self.client
+                    .post(format!("{}/api/search/language", self.credentials.base_url))
+                    .bearer_auth(&access_token)
+                    .json(&criteria)
+                    .send()?
+            };
+
+            let value: LanguageLocaleSearchResponse = Self::deserialize(response)?;
+            for item in value.data {
+                language_list.insert(item.locale.code, item.id);
+            }
+
+            page += 1;
+        }
+
+        Ok(IsoLanguageList {
+            data: language_list,
         })
     }
 
@@ -358,4 +397,70 @@ pub struct SwListResponse {
     pub data: Vec<Entity>,
 }
 
+#[derive(Debug, Deserialize)]
+pub struct Language {
+    pub id: String,
+    pub locale: Locale,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct Locale {
+    pub code: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct LanguageLocaleSearchResponse {
+    pub data: Vec<Language>,
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct IsoLanguageList {
+    pub data: HashMap<String, String>,
+}
+
+impl IsoLanguageList {
+    pub fn get_language_id_by_iso_code(&self, iso_code: &str) -> String {
+        match self.data.get(iso_code) {
+            Some(id) => id.to_string(),
+            None => {
+                println!("Language with iso code '{}' not found", iso_code);
+                "".to_string()
+            }
+        }
+    }
+}
+
 pub type Entity = serde_json::Map<String, serde_json::Value>;
+
+#[cfg(test)]
+mod tests {
+    use crate::api::IsoLanguageList;
+    use std::collections::HashMap;
+
+    #[test]
+    fn test_iso_language_list() {
+        let mut language_list_inner: HashMap<String, String> = HashMap::new();
+        language_list_inner.insert(
+            "de-DE".to_string(),
+            "cf8eb267dd2a4c54be07bf4b50d65ab5".to_string(),
+        );
+        language_list_inner.insert(
+            "en-GB".to_string(),
+            "a13966f91ef24dcabccf1668e3618955".to_string(),
+        );
+
+        let locale_list = IsoLanguageList {
+            data: language_list_inner,
+        };
+
+        assert_eq!(
+            locale_list.get_language_id_by_iso_code("de-DE"),
+            "cf8eb267dd2a4c54be07bf4b50d65ab5"
+        );
+        assert_eq!(
+            locale_list.get_language_id_by_iso_code("en-GB"),
+            "a13966f91ef24dcabccf1668e3618955"
+        );
+        assert_eq!(locale_list.get_language_id_by_iso_code("en-US"), "");
+    }
+}

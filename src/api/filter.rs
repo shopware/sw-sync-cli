@@ -15,6 +15,8 @@ pub struct Criteria {
     pub sort: Vec<CriteriaSorting>,
     #[serde(skip_serializing_if = "BTreeMap::is_empty")]
     pub associations: BTreeMap<String, Criteria>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub fields: Vec<String>,
 }
 
 fn skip_page_serialize(page: &u64) -> bool {
@@ -29,6 +31,7 @@ impl Default for Criteria {
             sort: vec![],
             filter: vec![],
             associations: BTreeMap::new(),
+            fields: vec![],
         }
     }
 }
@@ -149,6 +152,34 @@ pub struct EmptyObject {
 mod tests {
     use super::*;
     use serde_json::json;
+
+    #[test]
+    fn criteria_use_fields() {
+        let mut criteria = Criteria {
+            limit: Some(500),
+            page: 3,
+            fields: vec!["id".to_string(), "locale.code".to_string()],
+            ..Default::default()
+        };
+
+        criteria.add_association("locale");
+        let result = serde_json::to_string_pretty(&criteria).unwrap();
+
+        assert_eq!(
+            result,
+            r#"{
+  "limit": 500,
+  "page": 3,
+  "associations": {
+    "locale": {}
+  },
+  "fields": [
+    "id",
+    "locale.code"
+  ]
+}"#
+        );
+    }
 
     #[test]
     fn criteria_serialize_association() {
