@@ -34,10 +34,10 @@ jobs:
         run: cargo llvm-cov --all-features --no-fail-fast --json --output-path ./coverage.json
 
       - name: Generate coverage data HTML report
+        if: github.event_name == 'pull_request'
         run: cargo llvm-cov --all-features --no-fail-fast --html
 
       - name: Upload JSON coverage data
-        if: github.event_name == 'pull_request'
         id: coverage_upload_json
         uses: actions/upload-artifact@v4
         with:
@@ -61,6 +61,7 @@ jobs:
           issue_number: ${{ github.event.number }}
 
       - name: Download JSON coverage data from main branch
+        if: github.event_name == 'pull_request'
         id: download-artifact
         continue-on-error: true
         uses: dawidd6/action-download-artifact@v6
