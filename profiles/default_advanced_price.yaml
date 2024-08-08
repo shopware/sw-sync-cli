@@ -1,0 +1,81 @@
+entity: product_price
+
+mappings:
+  - file_column: "id"
+    entity_path: "id"
+  - file_column: "product id"
+    entity_path: "productId"
+  - file_column: "rule id"
+    entity_path: "ruleId"
+  - file_column: "quantity start"
+    entity_path: "quantityStart"
+  - file_column: "quantity end"
+    entity_path: "quantityEnd"
+  - file_column: "default price net"
+    key: "default_price_net"
+  - file_column: "default price gross"
+    key: "default_price_gross"
+  - file_column: "default list price net"
+    key: "default_list_price_net"
+  - file_column: "default list price gross"
+    key: "default_list_price_gross"
+  - file_column: "default cheapest price net"
+    key: "default_cheapest_price_net"
+  - file_column: "default cheapest price gross"
+    key: "default_cheapest_price_gross"
+  - file_column: "default percentage net"
+    key: "default_percentage_net"
+  - file_column: "default percentage gross"
+    key: "default_percentage_gross"
+
+serialize_script: |
+  let default_currency = get_default("CURRENCY");
+  let price = entity.price.find(|p| p.currencyId == default_currency);
+
+  row = #{
+    default_price_net: price.net,
+    default_price_gross: price.gross,
+    default_list_price_net: price.listPrice?.net,
+    default_list_price_gross: price.listPrice?.gross,
+    default_cheapest_price_net: price.regulationPrice?.net,
+    default_cheapest_price_gross: price.regulationPrice?.gross,
+    default_percentage_net: price.percentage?.net,
+    default_percentage_gross: price.percentage?.gross
+  };
+
+deserialize_script: |
+  let price = #{
+    net: row.default_price_net,
+    gross: row.default_price_gross,
+    linked: true,
+    currencyId: get_default("CURRENCY"),
+  };
+
+  if row.default_list_price_net != () {
+    price.listPrice = #{
+      net: row.default_list_price_net,
+      gross: row.default_list_price_gross,
+      linked: true,
+      currencyId: get_default("CURRENCY"),
+    };
+  }
+
+  if row.default_cheapest_price_net != () {
+    price.regulationPrice = #{
+      net: row.default_cheapest_price_net,
+      gross: row.default_cheapest_price_gross,
+      linked: true,
+      currencyId: get_default("CURRENCY"),
+    };
+  }
+
+  if row.default_percentage_net != () {
+    price.percentage = #{
+      net: row.default_percentage_net,
+      gross: row.default_percentage_gross,
+    };
+  }
+
+  entity = #{
+    price: [price],
+  };

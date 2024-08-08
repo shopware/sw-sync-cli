@@ -13,22 +13,55 @@ use std::path::Path;
 
 pub const DEFAULT_PROFILES: &[(&str, &str)] = &[
     (
-        "manufacturer.yaml",
-        include_str!("../profiles/manufacturer.yaml"),
+        "default_advanced_price.yaml",
+        include_str!("../profiles/default_advanced_price.yaml"),
     ),
     (
-        "product_required.yaml",
-        include_str!("../profiles/product_required.yaml"),
+        "default_cross_selling.yaml",
+        include_str!("../profiles/default_cross_selling.yaml"),
     ),
     (
-        "product_variants.yaml",
-        include_str!("../profiles/product_variants.yaml"),
+        "default_customer.yaml",
+        include_str!("../profiles/default_customer.yaml"),
     ),
     (
-        "product_with_manufacturer.yaml",
-        include_str!("../profiles/product_with_manufacturer.yaml"),
+        "default_media.yaml",
+        include_str!("../profiles/default_media.yaml"),
+    ),
+    (
+        "default_newsletter_recipient.yaml",
+        include_str!("../profiles/default_newsletter_recipient.yaml"),
+    ),
+    (
+        "default_order.yaml",
+        include_str!("../profiles/default_order.yaml"),
+    ),
+    (
+        "default_product.yaml",
+        include_str!("../profiles/default_product.yaml"),
+    ),
+    (
+        "default_product_variants.yaml",
+        include_str!("../profiles/default_product_variants.yaml"),
+    ),
+    (
+        "default_promotion_code.yaml",
+        include_str!("../profiles/default_promotion_code.yaml"),
+    ),
+    (
+        "default_promotion_discount.yaml",
+        include_str!("../profiles/default_promotion_discount.yaml"),
+    ),
+    (
+        "default_property.yaml",
+        include_str!("../profiles/default_property.yaml"),
+    ),
+    (
+        "default_variant_configuration.yaml",
+        include_str!("../profiles/default_variant_configuration.yaml"),
     ),
 ];
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Credentials {
     pub base_url: String,
@@ -114,7 +147,7 @@ pub struct EntityScriptMapping {
 mod tests {
     use super::*;
     use crate::api::Entity;
-    use crate::data::validate_paths_for_entity;
+    use crate::data::{prepare_scripting_environment, validate_paths_for_entity};
 
     #[test]
     fn all_default_profiles_should_be_included() {
@@ -155,6 +188,7 @@ mod tests {
         let raw_schema_content =
             std::fs::read_to_string("./fixtures/entity-schema-2024-08-01.json")
                 .expect("failed to read entity-schema fixture");
+
         let api_schema: Entity = serde_json::from_str(&raw_schema_content)
             .expect("failed to parse entity-schema fixture");
 
@@ -167,6 +201,12 @@ mod tests {
             validate_paths_for_entity(&profile.entity, &profile.mappings, &api_schema).expect(
                 &format!("failed to validate entity path's for default profile {profile_filename}"),
             );
+
+            // compile serialize & deserialize scripts
+            prepare_scripting_environment(&profile.serialize_script, &profile.deserialize_script)
+                .expect(&format!(
+                    "failed to compile scripts in default profile {profile_filename}"
+                ));
         }
     }
 }

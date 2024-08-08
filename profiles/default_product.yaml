@@ -1,0 +1,96 @@
+entity: product
+
+filter:
+  - type: "equals"
+    field: "parentId"
+    value: null
+
+associations:
+  - "manufacturer"
+
+mappings:
+  - file_column: "id"
+    entity_path: "id"
+  - file_column: "tax id"
+    entity_path: "taxId"
+  - file_column: "manufacturer id"
+    entity_path: "manufacturer?.id"
+  - file_column: "media id"
+    entity_path: "media"
+  - file_column: "cover id"
+    entity_path: "cover"
+  - file_column: "product number"
+    entity_path: "productNumber"
+  - file_column: "active"
+    entity_path: "active"
+  - file_column: "stock"
+    entity_path: "stock"
+  - file_column: "tax rate"
+    entity_path: "tax.taxRate"
+  - file_column: "tax name"
+    entity_path: "tax.name"
+  - file_column: "unit"
+    entity_path: "unit"
+  - file_column: "ean"
+    entity_path: "ean"
+  - file_column: "categories"
+    entity_path: "categories"
+  - file_column: "visibilities"
+    entity_path: "visibilities"
+  - file_column: "properties"
+    entity_path: "properties"
+  - file_column: "default name"
+    entity_path: "name"
+  - file_column: "default description"
+    entity_path: "description"
+  - file_column: "prices"
+    key: "prices"
+  - file_column: "default manufacturer name"
+    key: "default_manufacturer_name"
+  - file_column: "default price net"
+    key: "default_price_net"
+  - file_column: "default price gross"
+    key: "default_price_gross"
+
+serialize_script: |
+  row = #{
+    default_manufacturer_name: entity.manufacturer?.translated?.name
+  };
+
+  if entity.price == () {
+    row.default_price_net = "";
+    row.default_price_gross = "";
+  } else {
+    let default_currency = get_default("CURRENCY");
+    let price = entity.price.find(|p| p.currencyId == default_currency);
+    row.default_price_net = price.net;
+    row.default_price_gross = price.gross;
+  }
+
+  if entity.prices == [] {
+    row.prices = ();
+  } else {
+    row.prices = entity.prices;
+  }
+
+deserialize_script: |
+  let default_language = get_default("LANGUAGE_SYSTEM");
+
+  entity = #{
+    prices: row.prices,
+    price: [#{
+      net: row.default_price_net,
+      gross: row.default_price_gross,
+      linked: true,
+      currencyId: get_default("CURRENCY")
+    }]
+  };
+
+  if row.default_manufacturer_name != () {
+    entity.manufacturer = #{
+      translations: [#{
+        languageId: default_language,
+        name: row.default_manufacturer_name
+      }]
+    };
+  }

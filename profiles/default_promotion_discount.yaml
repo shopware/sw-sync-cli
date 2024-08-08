@@ -1,0 +1,31 @@
+entity: promotion_discount
+
+mappings:
+  - file_column: "id"
+    entity_path: "id"
+  - file_column: "promotion id"
+    entity_path: "promotionId"
+  - file_column: "scope"
+    entity_path: "scope"
+  - file_column: "type"
+    entity_path: "type"
+  - file_column: "value"
+    entity_path: "value"
+  - file_column: "consider advanced rules"
+    entity_path: "considerAdvancedRules"
+  - file_column: "max value"
+    entity_path: "maxValue"
+  - file_column: "sorter key"
+    entity_path: "sorterKey"
+  - file_column: "applier key"
+    key: "applier_key"
+  - file_column: "usage key"
+    entity_path: "usageKey"
+  - file_column: "picker key"
+    entity_path: "pickerKey"
+
+serialize_script: |
+  row.applier_key = entity.applierKey;
+
+deserialize_script: |
+  entity.applierKey = `${row.applier_key}`; // TODO: fix conversion (NEXT-37536)

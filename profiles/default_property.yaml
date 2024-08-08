@@ -1,0 +1,65 @@
+entity: property_group_option
+
+mappings:
+  - file_column: "id"
+    entity_path: "id"
+  - file_column: "group id"
+    entity_path: "groupId"
+  - file_column: "color hex code"
+    entity_path: "colorHexCode"
+  - file_column: "group display type"
+    entity_path: "group?.displayType"
+  - file_column: "group sorting type"
+    entity_path: "group?.sortingType"
+  - file_column: "media id"
+    entity_path: "mediaId"
+  - file_column: "media url"
+    entity_path: "media?.url"
+  - file_column: "media folder id"
+    entity_path: "media?.mediaFolderId"
+  - file_column: "media type"
+    entity_path: "media?.mediaType"
+  - file_column: "default name"
+    entity_path: "name"
+  - file_column: "default position"
+    entity_path: "position"
+  - file_column: "default group name"
+    key: "default_group_name"
+  - file_column: "default group description"
+    key: "default_group_description"
+  - file_column: "default group position"
+    key: "default_group_position"
+  - file_column: "default media title"
+    key: "default_media_title"
+  - file_column: "default media alt"
+    key: "default_media_alt"
+
+serialize_script: |
+  row = #{
+    default_group_name: entity.group?.translated?.name,
+    default_group_description: entity.group?.translated?.description,
+    default_group_position: entity.group?.translated?.position,
+    default_media_title: entity.media?.translated?.title,
+    default_media_alt: entity.media?.translated?.alt
+  };
+
+deserialize_script: |
+  let default_language = get_default("LANGUAGE_SYSTEM");
+
+  entity = #{
+    group: #{
+      translations: [#{
+        languageId: default_language,
+        name: row.default_group_name,
+        description: row.default_group_description,
+        position: row.default_group_position
+      }],
+    },
+    media: #{
+      translations: [#{
+        languageId: default_language,
+        title: row.default_media_title,
+        alt: row.default_media_alt
+      }],
+    },
+  };

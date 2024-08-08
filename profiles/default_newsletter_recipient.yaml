@@ -1,0 +1,35 @@
+entity: newsletter_recipient
+
+mappings:
+  - file_column: "id"
+    entity_path: "id"
+  - file_column: "salutation id"
+    entity_path: "salutationId"
+  - file_column: "sales channel id"
+    entity_path: "salesChannelId"
+  - file_column: "email"
+    entity_path: "email"
+  - file_column: "title"
+    entity_path: "title"
+  - file_column: "first name"
+    entity_path: "firstName"
+  - file_column: "last name"
+    entity_path: "lastName"
+  - file_column: "city"
+    entity_path: "city"
+  - file_column: "street"
+    entity_path: "street"
+  - file_column: "status"
+    entity_path: "status"
+  - file_column: "confirmedAt"
+    entity_path: "confirmedAt"
+  - file_column: "hash"
+    entity_path: "hash"
+  - file_column: "zipCode"
+    key: "zip_code"
+
+serialize_script: |
+  row.zip_code = entity.zipCode;
+
+deserialize_script: |
+  entity.zipCode = `${row.zip_code}`; // TODO: fix conversion (NEXT-37536)

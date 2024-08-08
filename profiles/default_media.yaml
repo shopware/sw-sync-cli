@@ -1,0 +1,17 @@
+entity: media
+
+mappings:
+  - file_column: "id"
+    entity_path: "id"
+  - file_column: "media folder id"
+    entity_path: "mediaFolderId"
+  - file_column: "url"
+    entity_path: "url"
+  - file_column: "private"
+    entity_path: "private"
+  - file_column: "media type"
+    entity_path: "mediaType"
+  - file_column: "default title"
+    entity_path: "title"
+  - file_column: "default alt"
+    entity_path: "alt"

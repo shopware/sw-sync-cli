@@ -1,0 +1,21 @@
+entity: product_cross_selling
+
+mappings:
+  - file_column: "id"
+    entity_path: "id"
+  - file_column: "product id"
+    entity_path: "productId"
+  - file_column: "active"
+    entity_path: "active"
+  - file_column: "position"
+    entity_path: "position"
+  - file_column: "limit"
+    entity_path: "limit"
+  - file_column: "type"
+    entity_path: "type"
+  - file_column: "sortBy"
+    entity_path: "sortBy"
+  - file_column: "sortDirection"
+    entity_path: "sortDirection"
+  - file_column: "default name"
+    entity_path: "name"

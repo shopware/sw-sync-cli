@@ -1,0 +1,233 @@
+entity: order
+
+mappings:
+  - file_column: "id"
+    entity_path: "id"
+  - file_column: "salesChannel id"
+    entity_path: "salesChannelId"
+  - file_column: "currency id"
+    entity_path: "currencyId"
+  - file_column: "language id"
+    entity_path: "languageId"
+  - file_column: "sales channel id"
+    entity_path: "salesChannelId"
+  - file_column: "state id"
+    entity_path: "stateId"
+  - file_column: "order number"
+    key: "order_number"
+  - file_column: "currency factor"
+    entity_path: "currencyFactor"
+  - file_column: "order date time"
+    entity_path: "orderDateTime"
+  - file_column: "order date time"
+    entity_path: "orderDateTime"
+  - file_column: "order customer id"
+    entity_path: "orderCustomer?.id"
+  - file_column: "order customer first name"
+    entity_path: "orderCustomer?.firstName"
+  - file_column: "order customer last name"
+    entity_path: "orderCustomer?.lastName"
+  - file_column: "order customer email"
+    entity_path: "orderCustomer?.email"
+  - file_column: "billing address id"
+    entity_path: "billingAddressId"
+  - file_column: "billing address first name"
+    entity_path: "billingAddress?.firstName"
+  - file_column: "billing address last name"
+    entity_path: "billingAddress?.lastName"
+  - file_column: "billing address street"
+    entity_path: "billingAddress?.street"
+  - file_column: "billing address zip code"
+    key: "billing_address_zipcode"
+  - file_column: "billing address company"
+    entity_path: "billingAddress?.company"
+  - file_column: "billing address city"
+    entity_path: "billingAddress?.city"
+  - file_column: "billing address department"
+    entity_path: "billingAddress?.department"
+  - file_column: "billing address country id"
+    entity_path: "billingAddress?.countryId"
+  - file_column: "billing address country state id"
+    entity_path: "billingAddress?.countryStateId"
+  - file_column: "item rounding decimals"
+    key: "item_rounding_decimals"
+  - file_column: "item rounding interval"
+    key: "item_rounding_interval"
+  - file_column: "item rounding rounds for net"
+    key: "item_rounding_round_for_net"
+  - file_column: "total rounding decimals"
+    key: "total_rounding_decimals"
+  - file_column: "total rounding interval"
+    key: "total_rounding_interval"
+  - file_column: "total rounding rounds for net"
+    key: "total_rounding_round_for_net"
+  - file_column: "price net"
+    key: "price_net"
+  - file_column: "price raw total"
+    key: "price_raw_total"
+  - file_column: "price tax status"
+    key: "price_tax_status"
+  - file_column: "price total price"
+    key: "price_total_price"
+  - file_column: "price position price"
+    key: "price_position_price"
+  - file_column: "price tax rates"
+    key: "price_tax_rates"
+  - file_column: "price tax percentages"
+    key: "price_tax_percentages"
+  - file_column: "price calculated taxes"
+    key: "price_calculated_taxes"
+  - file_column: "price calculated tax prices"
+    key: "price_calculated_tax_prices"
+  - file_column: "price calculated tax rates"
+    key: "price_calculated_tax_rates"
+  - file_column: "shipping cost quantity"
+    key: "shipping_cost_quantity"
+  - file_column: "shipping cost unit price"
+    key: "shipping_cost_unit_price"
+  - file_column: "shipping cost total price"
+    key: "shipping_cost_total_price"
+  - file_column: "shipping cost tax rates"
+    key: "shipping_cost_tax_rates"
+  - file_column: "shipping cost tax percentages"
+    key: "shipping_cost_tax_percentages"
+  - file_column: "shipping cost calculated taxes"
+    key: "shipping_cost_calculated_taxes"
+  - file_column: "shipping cost calculated tax prices"
+    key: "shipping_cost_calculated_tax_prices"
+  - file_column: "shipping cost calculated tax rates"
+    key: "shipping_cost_calculated_tax_rates"
+
+serialize_script: |
+  fn encode_values(arr, value_name) {
+    let str = "";
+
+    for (value, index) in arr {
+        str += value[value_name];
+        
+        if index < arr.len() - 1 {
+            str += ", ";
+        }
+    }
+    
+    return str;
+  }
+
+  row = #{
+    order_number: entity.orderNumber,
+    billing_address_zipcode: entity.billingAddress?.zipcode,
+    item_rounding_decimals: entity.itemRounding?.decimals,
+    item_rounding_interval: entity.itemRounding?.interval,
+    item_rounding_round_for_net: entity.itemRounding?.roundForNet,
+    total_rounding_decimals: entity.totalRounding?.decimals,
+    total_rounding_interval: entity.totalRounding?.interval,
+    total_rounding_round_for_net: entity.totalRounding?.roundForNet,
+    price_net: entity.price?.netPrice,
+    price_raw_total: entity.price?.rawTotal,
+    price_tax_status: entity.price?.taxStatus,
+    price_total_price: entity.price?.totalPrice,
+    price_position_price: entity.price?.positionPrice,
+    price_tax_rates: encode_values(entity.price?.taxRules, "taxRate"),
+    price_tax_percentages: encode_values(entity.price?.taxRules, "percentage"),
+    price_calculated_taxes: encode_values(entity.price?.calculatedTaxes, "tax"),
+    price_calculated_tax_prices: encode_values(entity.price?.calculatedTaxes, "price"),
+    price_calculated_tax_rates: encode_values(entity.price?.calculatedTaxes, "taxRate"),
+    shipping_cost_quantity: entity.shippingCosts?.quantity,
+    shipping_cost_unit_price: entity.shippingCosts?.unitPrice,
+    shipping_cost_total_price: entity.shippingCosts?.totalPrice,
+    shipping_cost_tax_rates: encode_values(entity.shippingCosts?.taxRules, "taxRate"),
+    shipping_cost_tax_percentages: encode_values(entity.shippingCosts?.taxRules, "percentage"),
+    shipping_cost_calculated_taxes: encode_values(entity.shippingCosts?.calculatedTaxes, "tax"),
+    shipping_cost_calculated_tax_prices: encode_values(entity.shippingCosts?.calculatedTaxes, "price"),
+    shipping_cost_calculated_tax_rates: encode_values(entity.shippingCosts?.calculatedTaxes, "taxRate")
+  };
+
+deserialize_script: |
+  let price = #{
+    netPrice: row.price_net,
+    rawTotal: row.price_raw_total,
+    taxStatus: row.price_tax_status,
+    totalPrice: row.price_total_price,
+    positionPrice: row.price_position_price,
+    taxRules: [],
+    calculatedTaxes: []
+  };
+
+  if row.price_tax_rates != () && row.price_tax_percentages != () {
+    let tax_rates = row.price_tax_rates.split(", ");
+    let tax_percentages = row.price_tax_percentages.split(", ");
+
+    for (tax_rate, index) in tax_rates {
+      price.taxRules.push(#{
+        taxRate: tax_rate,
+        percentage: tax_percentages[index]
+      });
+    }
+  }
+
+  if row.price_calculated_taxes != () && row.price_calculated_tax_prices != () && row.price_calculated_tax_rates != () {
+    let tax_rates = row.price_calculated_tax_rates.split(", ");
+    let tax_prices = row.price_calculated_tax_prices.split(", ");
+    let taxes = row.price_calculated_taxes.split(", ");
+
+    for (tax, index) in taxes {
+      price.calculatedTaxes.push(#{
+        tax: tax,
+        price: tax_prices[index],
+        taxRate: tax_rates[index]
+      });
+    }
+  }
+
+  let shipping_cost = #{
+    quantity: row.shipping_cost_quantity,
+    unitPrice: row.shipping_cost_unit_price,
+    totalPrice: row.shipping_cost_total_price,
+    taxRules: [],
+    calculatedTaxes: []
+  };
+
+  if row.shipping_cost_tax_rates != () && row.shipping_cost_tax_percentages != () {
+    let tax_rates = row.shipping_cost_tax_rates.split(", ");
+    let tax_percentages = row.shipping_cost_tax_percentages.split(", ");
+
+    for (tax_rate, index) in tax_rates {
+      shipping_cost.taxRules.push(#{
+        taxRate: tax_rate,
+        percentage: tax_percentages[index]
+      });
+    }
+  }
+
+  if row.shipping_cost_calculated_taxes != () && row.shipping_cost_calculated_tax_prices != () && row.shipping_cost_calculated_tax_rates != () {
+    let tax_rates = row.shipping_cost_calculated_tax_rates.split(", ");
+    let tax_prices = row.shipping_cost_calculated_tax_prices.split(", ");
+    let taxes = row.shipping_cost_calculated_taxes.split(", ");
+
+    for (tax, index) in taxes {
+      shipping_cost.calculatedTaxes.push(#{
+        tax: tax,
+        price: tax_prices[index],
+        taxRate: tax_rates[index]
+      });
+    }
+  }
+
+  entity = #{
+    orderNumber: `${row.order_number}`, // TODO: fix conversion (NEXT-37536)
+    billingAddress: #{
+      zipcode: `${row.billing_address_zipcode}`, // TODO: fix conversion (NEXT-37536)
+    },
+    itemRounding: #{
+      decimals: row.item_rounding_decimals,
+      interval: row.item_rounding_interval,
+      roundForNet: row.item_rounding_round_for_net,
+    },
+    totalRounding: #{
+      decimals: row.total_rounding_decimals,
+      interval: row.total_rounding_interval,
+      roundForNet: row.total_rounding_round_for_net,
+    },
+    price: price,
+    shippingCosts: shipping_cost
+  };
