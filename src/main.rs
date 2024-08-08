@@ -22,26 +22,25 @@ pub struct SyncContext {
     /// specifies the input or output file
     pub file: PathBuf,
     pub limit: Option<u64>,
-    pub in_flight_limit: usize,
     pub scripting_environment: ScriptingEnvironment,
     pub associations: HashSet<String>,
+    pub in_flight_limit: usize,
 }
 
-#[tokio::main]
-async fn main() -> anyhow::Result<()> {
+fn main() -> anyhow::Result<()> {
     let start_instant = Instant::now();
     let cli = Cli::parse();
 
     match cli.command {
         Commands::Index { skip } => {
-            index(skip).await?;
+            index(skip)?;
             println!("Successfully triggered indexing.");
         }
         Commands::CopyProfiles { force, list, path } => {
             copy_profiles(force, list, path);
         }
         Commands::Auth { domain, id, secret } => {
-            auth(domain, id, secret).await?;
+            auth(domain, id, secret)?;
             println!("Successfully authenticated. You can continue with other commands now.");
         }
         Commands::Sync {
@@ -53,11 +52,16 @@ async fn main() -> anyhow::Result<()> {
             // verbose,
             in_flight_limit,
         } => {
-            let context = create_context(profile, file, limit, in_flight_limit).await?;
+            rayon::ThreadPoolBuilder::new()
+                .num_threads(in_flight_limit)
+                .build_global()
+                .unwrap();
+            println!("using at most {in_flight_limit} number of threads in a pool");
+            let context = create_context(profile, file, limit, in_flight_limit)?;
 
             match mode {
                 SyncMode::Import => {
-                    tokio::task::spawn_blocking(move || import(Arc::new(context))).await??;
+                    import(Arc::new(context))?;
 
                     println!("Imported successfully");
                     if disable_index {
@@ -65,12 +69,12 @@ async fn main() -> anyhow::Result<()> {
                         println!("Or simply run: sw-sync-cli index");
                     } else {
                         println!("Triggering indexing...");
-                        index(vec![]).await?;
+                        index(vec![])?;
                         println!("Successfully triggered indexing.");
                     }
                 }
                 SyncMode::Export => {
-                    export(Arc::new(context)).await?;
+                    export(Arc::new(context))?;
 
                     println!("Exported successfully");
                 }
@@ -86,11 +90,11 @@ async fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
-async fn index(skip: Vec<String>) -> anyhow::Result<()> {
-    let credentials = Credentials::read_credentials().await?;
+fn index(skip: Vec<String>) -> anyhow::Result<()> {
+    let credentials = Credentials::read_credentials()?;
 
-    let sw_client = SwClient::new(credentials, SwClient::DEFAULT_IN_FLIGHT).await?;
-    sw_client.index(skip).await?;
+    let sw_client = SwClient::new(credentials)?;
+    sw_client.index(skip)?;
 
     Ok(())
 }
@@ -137,7 +141,7 @@ pub fn copy_profiles(force: bool, list: bool, path: Option<PathBuf>) {
     }
 }
 
-async fn auth(domain: String, id: String, secret: String) -> anyhow::Result<()> {
+fn auth(domain: String, id: String, secret: String) -> anyhow::Result<()> {
     let credentials = Credentials {
         base_url: domain.trim_end_matches('/').to_string(),
         access_key_id: id,
@@ -145,22 +149,22 @@ async fn auth(domain: String, id: String, secret: String) -> anyhow::Result<()> 
     };
 
     // check if credentials work
-    let _ = SwClient::new(credentials.clone(), SwClient::DEFAULT_IN_FLIGHT).await?;
+    let _ = SwClient::new(credentials.clone())?;
 
     // write them to file
     let serialized = toml::to_string(&credentials)?;
-    tokio::fs::write("./.credentials.toml", serialized).await?;
+    std::fs::write("./.credentials.toml", serialized)?;
 
     Ok(())
 }
 
-async fn create_context(
+fn create_context(
     profile_path: PathBuf,
     file: PathBuf,
     limit: Option<u64>,
     in_flight_limit: usize,
 ) -> anyhow::Result<SyncContext> {
-    let profile = Profile::read_profile(profile_path).await?;
+    let profile = Profile::read_profile(profile_path)?;
     let mut associations = profile.associations.clone();
     for mapping in &profile.mappings {
         if let Mapping::ByPath(by_path) = mapping {
@@ -170,10 +174,10 @@ async fn create_context(
         }
     }
 
-    let credentials = Credentials::read_credentials().await?;
-    let sw_client = SwClient::new(credentials, in_flight_limit).await?;
+    let credentials = Credentials::read_credentials()?;
+    let sw_client = SwClient::new(credentials)?;
 
-    let api_schema = sw_client.entity_schema().await;
+    let api_schema = sw_client.entity_schema();
     let entity = &profile.entity;
 
     validate_paths_for_entity(entity, &profile.mappings, &api_schema?)?;
@@ -188,8 +192,8 @@ async fn create_context(
         profile,
         file,
         limit,
-        in_flight_limit,
         scripting_environment,
         associations,
+        in_flight_limit,
     })
 }

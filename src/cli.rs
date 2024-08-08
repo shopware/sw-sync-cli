@@ -2,7 +2,6 @@
 //!
 //! Makes heavy use of <https://docs.rs/clap/latest/clap/>
 
-use crate::api::SwClient;
 use clap::{Parser, Subcommand};
 use std::path::PathBuf;
 use std::string::ToString;
@@ -85,8 +84,10 @@ pub enum Commands {
     },
 }
 
+pub const DEFAULT_IN_FLIGHT: usize = 10;
+
 fn in_flight_limit_default_as_string() -> String {
-    SwClient::DEFAULT_IN_FLIGHT.to_string()
+    DEFAULT_IN_FLIGHT.to_string()
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, clap::ValueEnum)]
@@ -98,7 +99,6 @@ pub enum SyncMode {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::api::SwClient;
 
     #[test]
     fn test_basic_cli_arg_parsing() {
@@ -129,7 +129,7 @@ mod tests {
                     file: "./output.csv".into(),
                     limit: None,
                     disable_index: false,
-                    in_flight_limit: SwClient::DEFAULT_IN_FLIGHT,
+                    in_flight_limit: DEFAULT_IN_FLIGHT,
                 },
             }
         );
