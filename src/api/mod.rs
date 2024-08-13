@@ -62,18 +62,8 @@ impl SwClient {
 
             criteria.add_association("locale");
 
-            let request_builder = self
-                .client
-                .request(
-                    Method::POST,
-                    format!("{}/api/search/language", self.credentials.base_url),
-                )
-                .json(&criteria);
-
-            let response = self.handle_authenticated_request(request_builder)?;
-
-            let value: LanguageLocaleSearchResponse = Self::deserialize(response)?;
-            for item in value.data {
+            let list: SwListResponse<Language> = self.list("language", &criteria)?;
+            for item in list.data {
                 language_list.insert(item.locale.code, item.id);
             }
 
@@ -82,6 +72,33 @@ impl SwClient {
 
         Ok(IsoLanguageList {
             data: language_list,
+        })
+    }
+
+    pub fn get_currencies(&self) -> Result<CurrencyList, SwApiError> {
+        let mut page = 1;
+        let mut currency_list: HashMap<String, String> = HashMap::new();
+
+        let total = self.get_total("currency", &[])?;
+
+        while currency_list.len() < total as usize {
+            let criteria = Criteria {
+                page,
+                limit: Some(Criteria::MAX_LIMIT),
+                fields: vec!["id".to_string(), "isoCode".to_string()],
+                ..Default::default()
+            };
+
+            let list: SwListResponse<Currency> = self.list("currency", &criteria)?;
+            for item in list.data {
+                currency_list.insert(item.iso_code, item.id);
+            }
+
+            page += 1;
+        }
+
+        Ok(CurrencyList {
+            data: currency_list,
         })
     }
 
@@ -190,7 +207,14 @@ impl SwClient {
         Ok(count)
     }
 
-    pub fn list(&self, entity: &str, criteria: &Criteria) -> Result<SwListResponse, SwApiError> {
+    pub fn list<T>(
+        &self,
+        entity: &str,
+        criteria: &Criteria,
+    ) -> Result<SwListResponse<T>, SwApiError>
+    where
+        T: for<'a> Deserialize<'a> + Debug + Send + 'static,
+    {
         // entity needs to be provided as kebab-case instead of snake_case
         let entity = entity.replace('_', "-");
 
@@ -219,7 +243,7 @@ impl SwClient {
             return Err(SwApiError::Server(status, body));
         }
 
-        let value: SwListResponse = Self::deserialize(response)?;
+        let value: SwListResponse<T> = Self::deserialize(response)?;
 
         Ok(value)
     }
@@ -346,7 +370,6 @@ impl SwClient {
         }
     }
 }
-
 #[derive(Debug, Serialize)]
 struct IndexBody {
     skip: Vec<String>,
@@ -418,8 +441,32 @@ pub struct SwErrorSource {
 }
 
 #[derive(Debug, Deserialize)]
-pub struct SwListResponse {
-    pub data: Vec<Entity>,
+pub struct SwListResponse<T> {
+    pub data: Vec<T>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct Currency {
+    pub id: String,
+    #[serde(rename = "isoCode")]
+    pub iso_code: String,
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct CurrencyList {
+    pub data: HashMap<String, String>,
+}
+
+impl CurrencyList {
+    pub fn get_currency_id_by_iso_code(&self, iso_code: &str) -> String {
+        match self.data.get(iso_code) {
+            Some(id) => id.to_string(),
+            None => {
+                println!("Currency with iso code '{}' not found", iso_code);
+                "".to_string()
+            }
+        }
+    }
 }
 
 #[derive(Debug, Deserialize)]
@@ -431,11 +478,6 @@ pub struct Language {
 #[derive(Debug, Deserialize)]
 pub struct Locale {
     pub code: String,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct LanguageLocaleSearchResponse {
-    pub data: Vec<Language>,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -459,6 +501,7 @@ pub type Entity = serde_json::Map<String, serde_json::Value>;
 
 #[cfg(test)]
 mod tests {
+    use crate::api::CurrencyList;
     use crate::api::IsoLanguageList;
     use std::collections::HashMap;
 
@@ -487,5 +530,32 @@ mod tests {
             "a13966f91ef24dcabccf1668e3618955"
         );
         assert_eq!(locale_list.get_language_id_by_iso_code("en-US"), "");
+    }
+
+    #[test]
+    fn test_currency_list() {
+        let mut currency_list_inner: HashMap<String, String> = HashMap::new();
+        currency_list_inner.insert(
+            "EUR".to_string(),
+            "a55d590baf2c432999f650f421f25eb6".to_string(),
+        );
+        currency_list_inner.insert(
+            "USD".to_string(),
+            "cae49554610b4df2be0fbd61be51f66d".to_string(),
+        );
+
+        let currency_list = CurrencyList {
+            data: currency_list_inner,
+        };
+
+        assert_eq!(
+            currency_list.get_currency_id_by_iso_code("EUR"),
+            "a55d590baf2c432999f650f421f25eb6"
+        );
+        assert_eq!(
+            currency_list.get_currency_id_by_iso_code("USD"),
+            "cae49554610b4df2be0fbd61be51f66d"
+        );
+        assert_eq!(currency_list.get_currency_id_by_iso_code("GBP"), "");
     }
 }

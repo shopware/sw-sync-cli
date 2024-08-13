@@ -1,7 +1,7 @@
 //! Everything related to exporting data out of shopware
 
 use crate::api::filter::Criteria;
-use crate::api::SwListResponse;
+use crate::api::{Entity, SwListResponse};
 use crate::data::transform::serialize_entity;
 use crate::SyncContext;
 use std::cmp;
@@ -88,7 +88,7 @@ fn send_request(
     page: u64,
     chunk_limit: usize,
     context: &SyncContext,
-) -> anyhow::Result<SwListResponse> {
+) -> anyhow::Result<SwListResponse<Entity>> {
     let mut criteria = Criteria {
         page,
         limit: Some(chunk_limit),
@@ -109,7 +109,7 @@ fn send_request(
 fn process_response(
     page: u64,
     chunk_limit: usize,
-    response: SwListResponse,
+    response: SwListResponse<Entity>,
     context: &SyncContext,
 ) -> anyhow::Result<(u64, Vec<Vec<String>>)> {
     let mut rows: Vec<Vec<String>> = Vec::with_capacity(chunk_limit);

@@ -144,7 +144,7 @@ pub struct EntityScriptMapping {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::api::{Entity, IsoLanguageList};
+    use crate::api::{CurrencyList, Entity, IsoLanguageList};
     use crate::data::{prepare_scripting_environment, validate_paths_for_entity};
 
     #[test]
@@ -205,6 +205,7 @@ mod tests {
                 &profile.serialize_script,
                 &profile.deserialize_script,
                 IsoLanguageList::default(),
+                CurrencyList::default(),
             )
             .expect(&format!(
                 "failed to compile scripts in default profile {profile_filename}"

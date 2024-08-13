@@ -182,13 +182,14 @@ fn create_context(
 
     validate_paths_for_entity(entity, &profile.mappings, &api_schema?)?;
 
-    // ToDo: create lookup table for currencies?
     let language_list = sw_client.get_languages()?;
+    let currency_list = sw_client.get_currencies()?;
 
     let scripting_environment = prepare_scripting_environment(
         &profile.serialize_script,
         &profile.deserialize_script,
         language_list,
+        currency_list,
     )?;
 
     Ok(SyncContext {

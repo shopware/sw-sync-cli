@@ -152,6 +152,18 @@ deserialize_script: |
     linked: true,
     currencyId: get_default("CURRENCY"),
   });
+
+  // You can get the default language or a specific language id by their ISO code
+  // Default language is used here and will return the default language id
+  let default_language_id = get_default("LANGUAGE_SYSTEM");
+  // For a specific language id you can use the get_language_by_iso function:
+  let specific_language_id = get_language_by_iso("de-DE"); // It will return the language id for "de-DE"
+
+  // You can also get different currencies by their ISO code
+  // Default currency is used here and will return the default currency id
+  let default_currency_id = get_default("CURRENCY");
+  // For a specific currency id you can use the get_currency_by_iso function:
+  let eur_currency_id = get_currency_by_iso("EUR"); // It will return the currency id for "EUR"
 ```
 
 ## License
