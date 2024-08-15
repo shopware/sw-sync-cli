@@ -1,6 +1,6 @@
 //! Everything scripting related
 
-use crate::api::{Entity, IsoLanguageList};
+use crate::api::{CurrencyList, Entity, IsoLanguageList};
 use crate::config_file::{Mapping, Profile};
 use crate::data::transform::get_json_value_from_string;
 use anyhow::Context;
@@ -104,8 +104,9 @@ pub fn prepare_scripting_environment(
     raw_serialize_script: &str,
     raw_deserialize_script: &str,
     language_list: IsoLanguageList,
+    currency_list: CurrencyList,
 ) -> anyhow::Result<ScriptingEnvironment> {
-    let engine = get_base_engine(language_list);
+    let engine = get_base_engine(language_list, currency_list);
     let serialize_ast = if raw_serialize_script.is_empty() {
         None
     } else {
@@ -130,7 +131,7 @@ pub fn prepare_scripting_environment(
     })
 }
 
-fn get_base_engine(language_list: IsoLanguageList) -> Engine {
+fn get_base_engine(language_list: IsoLanguageList, currency_list: CurrencyList) -> Engine {
     let mut engine = Engine::new_raw();
     engine.set_optimization_level(OptimizationLevel::Full);
 
@@ -155,6 +156,10 @@ fn get_base_engine(language_list: IsoLanguageList) -> Engine {
 
     engine.register_fn("get_language_by_iso", move |iso: &str| {
         language_list.get_language_id_by_iso_code(iso)
+    });
+
+    engine.register_fn("get_currency_by_iso", move |iso: &str| {
+        currency_list.get_currency_id_by_iso_code(iso)
     });
 
     // Some reference implementations below
@@ -239,6 +244,24 @@ mod tests {
         locale_list
     }
 
+    fn create_currency_list() -> CurrencyList {
+        let mut currency_list_inner: HashMap<String, String> = HashMap::new();
+        currency_list_inner.insert(
+            "EUR".to_string(),
+            "a55d590baf2c432999f650f421f25eb6".to_string(),
+        );
+        currency_list_inner.insert(
+            "USD".to_string(),
+            "cae49554610b4df2be0fbd61be51f66d".to_string(),
+        );
+
+        let currency_list = CurrencyList {
+            data: currency_list_inner,
+        };
+
+        currency_list
+    }
+
     #[test]
     fn test_basic_serialize() {
         let script_env = prepare_scripting_environment(
@@ -251,6 +274,7 @@ mod tests {
             // deserialize
         "#,
             create_language_iso_list(),
+            create_currency_list(),
         )
         .unwrap();
 
@@ -277,6 +301,7 @@ mod tests {
     #[test]
     fn test_basic_deserialize() {
         let iso_list = create_language_iso_list();
+        let currency_list = create_currency_list();
 
         let script_env = prepare_scripting_environment(
             r#"
@@ -286,10 +311,12 @@ mod tests {
             // deserialize
             entity["fiz"] = row["bar_key"];
             entity["number"] = row["number_plus_one"] - 1;
-            entity["currencyId"] = get_default("CURRENCY");
+            entity["defaultCurrencyId"] = get_default("CURRENCY");
             entity["languageId"] = get_language_by_iso("de-DE");
+            entity["currencyId"] = get_currency_by_iso("USD");
         "#,
             iso_list.clone(),
+            currency_list.clone(),
         )
         .unwrap();
 
@@ -319,8 +346,9 @@ mod tests {
             serde_json::from_value(json!({
                 "fiz": "buzz",
                 "number": 42,
-                "currencyId": inside_script::get_default("CURRENCY"),
+                "defaultCurrencyId": inside_script::get_default("CURRENCY"),
                 "languageId": iso_list.get_language_id_by_iso_code("de-DE"),
+                "currencyId": currency_list.get_currency_id_by_iso_code("USD"),
             }))
             .unwrap()
         );
