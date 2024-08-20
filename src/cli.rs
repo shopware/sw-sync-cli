@@ -3,6 +3,7 @@
 //! Makes heavy use of <https://docs.rs/clap/latest/clap/>
 
 use clap::{Parser, Subcommand};
+use std::num::NonZeroU8;
 use std::path::PathBuf;
 use std::string::ToString;
 
@@ -71,7 +72,7 @@ pub enum Commands {
         #[arg(short, long)]
         limit: Option<u64>,
 
-        // Disable triggering indexer after sync ended successfully
+        /// Disable triggering the indexer after sync ended successfully
         #[arg(value_enum, short, long, default_value = "false")]
         disable_index: bool,
 
@@ -81,6 +82,10 @@ pub enum Commands {
         /// How many requests can be "in-flight" at the same time
         #[arg(short, long, default_value = in_flight_limit_default_as_string())]
         in_flight_limit: usize,
+
+        /// Maximum number of tries a request is executed on a recoverable failure (1..=255)
+        #[arg(short, long, default_value = "10")]
+        try_count: NonZeroU8,
     },
 }
 
@@ -130,6 +135,7 @@ mod tests {
                     limit: None,
                     disable_index: false,
                     in_flight_limit: DEFAULT_IN_FLIGHT,
+                    try_count: NonZeroU8::new(10).unwrap()
                 },
             }
         );

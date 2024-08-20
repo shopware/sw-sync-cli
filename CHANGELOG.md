@@ -1,5 +1,6 @@
 # NEXT-RELEASE
-- NEXT-37303 - [BREAKING] changed `sync` command argument `--schema` `-s` to `--profile` `-p`
+- NEXT-37516 - Added `sync` command argument `-t` `--try-count` which configures the maximum number of tries before a failed but processable request is dropped for the `import` mode
+- NEXT-37303 - [BREAKING] changed `sync` command argument `-s` `--schema` to `-p` `--profile`
 - NEXT-37303 - [BREAKING] Fixed an issue where `row` values were always provided as strings in the deserialize script.
 Now they are converted into their proper types before passed to the script.
 - NEXT-37313 - Implemented re-authentication for API calls to handle expired bearer tokens
