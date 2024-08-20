@@ -83,7 +83,13 @@ pub fn serialize_entity(
                             script_mapping.key
                         )
                     })?;
-                let value_str = serde_json::to_string(value)?;
+
+                let value_str = if value.is_string() {
+                    // workaround: we don't need "json string" quotes here, so we use the inner string value directly
+                    value.to_string()
+                } else {
+                    serde_json::to_string(value)?
+                };
 
                 row.push(value_str);
             }

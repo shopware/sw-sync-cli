@@ -1,5 +1,7 @@
 # NEXT-RELEASE
-- NEXT-37516 - Added `sync` command argument `-t` `--try-count` which configures the maximum number of tries before a failed but processable request is dropped for the `import` mode
+
+# v0.8.0
+
 - NEXT-37303 - [BREAKING] changed `sync` command argument `-s` `--schema` to `-p` `--profile`
 - NEXT-37303 - [BREAKING] Fixed an issue where `row` values were always provided as strings in the deserialize script.
 Now they are converted into their proper types before passed to the script.
@@ -10,7 +12,9 @@ Now they are converted into their proper types before passed to the script.
 - NEXT-37317 - Added various default profiles
 - NEXT-37318 - Added `copy-profile` command, to copy the default profiles to your system
 - NEXT-37504 - Fixed the generation of request criteria to support correct nested associations
+- NEXT-37516 - Added `sync` command argument `-t` `--try-count` which configures the maximum number of tries before a failed but processable request is dropped for the `import` mode
 - NEXT-37602 - Added `get_currency_by_iso(isoCode)` function to scripting, which allows to lookup currency IDs in the shop based on their iso code. A lookup table is generated at startup, thus calling this function should not cause excessive slowdowns. 
+- NEXT-37781 - Fixed string values set by script containing double quotes
 
 # v0.7.1
 
