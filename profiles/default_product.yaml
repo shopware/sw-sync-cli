@@ -15,6 +15,8 @@ mappings:
     entity_path: "taxId"
   - file_column: "manufacturer id"
     entity_path: "manufacturer?.id"
+  - file_column: "default manufacturer name"
+    entity_path: "manufacturer?.name"
   - file_column: "media id"
     entity_path: "media"
   - file_column: "cover id"
@@ -45,18 +47,12 @@ mappings:
     entity_path: "description"
   - file_column: "prices"
     key: "prices"
-  - file_column: "default manufacturer name"
-    key: "default_manufacturer_name"
   - file_column: "default price net"
     key: "default_price_net"
   - file_column: "default price gross"
     key: "default_price_gross"
 
 serialize_script: |
-  row = #{
-    default_manufacturer_name: entity.manufacturer?.translated?.name
-  };
-
   if entity.price == () {
     row.default_price_net = "";
     row.default_price_gross = "";
@@ -74,8 +70,6 @@ serialize_script: |
   }
 
 deserialize_script: |
-  let default_language = get_default("LANGUAGE_SYSTEM");
-
   entity = #{
     prices: row.prices,
     price: [#{
@@ -85,12 +79,3 @@ deserialize_script: |
       currencyId: get_default("CURRENCY")
     }]
   };
-
-  if row.default_manufacturer_name != () {
-    entity.manufacturer = #{
-      translations: [#{
-        languageId: default_language,
-        name: row.default_manufacturer_name
-      }]
-    };
-  }
