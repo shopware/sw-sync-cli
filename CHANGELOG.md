@@ -1,4 +1,7 @@
 # NEXT-RELEASE
+
+# v0.8.0
+
 - NEXT-37303 - [BREAKING] changed `sync` command argument `-s` `--schema` to `-p` `--profile`
 - NEXT-37303 - [BREAKING] Fixed an issue where `row` values were always provided as strings in the deserialize script.
 Now they are converted into their proper types before passed to the script.
