@@ -6,6 +6,7 @@ use crate::data::{export, import, prepare_scripting_environment, ScriptingEnviro
 use clap::Parser;
 use std::collections::HashSet;
 use std::fs;
+use std::num::NonZeroU8;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Instant;
@@ -25,6 +26,7 @@ pub struct SyncContext {
     pub scripting_environment: ScriptingEnvironment,
     pub associations: HashSet<String>,
     pub in_flight_limit: usize,
+    pub try_count: NonZeroU8,
 }
 
 fn main() -> anyhow::Result<()> {
@@ -51,13 +53,14 @@ fn main() -> anyhow::Result<()> {
             disable_index,
             // verbose,
             in_flight_limit,
+            try_count,
         } => {
             rayon::ThreadPoolBuilder::new()
                 .num_threads(in_flight_limit)
                 .build_global()
                 .unwrap();
             println!("using at most {in_flight_limit} number of threads in a pool");
-            let context = create_context(profile, file, limit, in_flight_limit)?;
+            let context = create_context(profile, file, limit, in_flight_limit, try_count)?;
 
             match mode {
                 SyncMode::Import => {
@@ -163,6 +166,7 @@ fn create_context(
     file: PathBuf,
     limit: Option<u64>,
     in_flight_limit: usize,
+    try_count: NonZeroU8,
 ) -> anyhow::Result<SyncContext> {
     let profile = Profile::read_profile(profile_path)?;
     let mut associations = profile.associations.clone();
@@ -200,5 +204,6 @@ fn create_context(
         scripting_environment,
         associations,
         in_flight_limit,
+        try_count,
     })
 }

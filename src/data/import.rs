@@ -1,9 +1,10 @@
 //! Everything related to import data into shopware
 
 use crate::api::filter::Criteria;
-use crate::api::{Entity, SwApiError, SwErrorBody, SyncAction};
+use crate::api::{Entity, SwApiError, SwError, SwErrorBody, SyncAction};
 use crate::data::transform::deserialize_row;
 use crate::SyncContext;
+use anyhow::anyhow;
 use csv::StringRecord;
 use itertools::Itertools;
 use std::sync::Arc;
@@ -105,33 +106,72 @@ fn sync_chunk(
     mut chunk: Vec<Entity>,
     context: &Arc<SyncContext>,
 ) -> anyhow::Result<()> {
-    match context
-        .sw_client
-        .sync(&context.profile.entity, SyncAction::Upsert, &chunk)
-    {
-        Ok(()) => Ok(()),
-        Err(SwApiError::Server(_, error_body)) => {
-            remove_invalid_entries_from_chunk(row_indices, &mut chunk, error_body);
-
-            // retry
-            context
-                .sw_client
-                .sync(&context.profile.entity, SyncAction::Upsert, &chunk)?;
-            Ok(())
+    let mut try_count = context.try_count.get();
+    loop {
+        if try_count == 0 {
+            return Err(anyhow!("max try count reached"));
         }
-        Err(e) => Err(e.into()),
+
+        let (error_status, error_body) =
+            match context
+                .sw_client
+                .sync(&context.profile.entity, SyncAction::Upsert, &chunk)
+            {
+                Ok(()) => {
+                    return Ok(());
+                }
+                Err(SwApiError::Server(error_status, error_body)) => (error_status, error_body),
+                Err(e) => {
+                    return Err(e.into());
+                }
+            };
+
+        match error_body {
+            body if body.check_for_error_code(SwError::ERROR_CODE_DEADLOCK) => {
+                println!("deadlock occurred; retry initialized");
+                try_count = try_count.saturating_sub(1);
+            }
+            ref body
+                if body
+                    .errors
+                    .iter()
+                    .any(|e| matches!(e, SwError::WriteError { .. })) =>
+            {
+                println!("write error occurred; retry initialized");
+                remove_invalid_entries_from_chunk(row_indices, &mut chunk, body);
+
+                if chunk.is_empty() {
+                    return Ok(());
+                }
+
+                try_count = try_count.saturating_sub(1);
+            }
+            body => {
+                return Err(SwApiError::Server(error_status, body).into());
+            }
+        };
+
+        println!("tries remaining: {try_count}")
     }
 }
 
 fn remove_invalid_entries_from_chunk(
     row_indices: &[usize],
     chunk: &mut Vec<Entity>,
-    error_body: SwErrorBody,
+    error_body: &SwErrorBody,
 ) {
     let mut to_be_removed = vec![];
-    for err in error_body.errors {
+    for err in &error_body.errors {
+        let (source, detail) = match err {
+            SwError::WriteError { source, detail, .. } => (source, detail),
+            err => {
+                println!("{:?}", err);
+                continue;
+            }
+        };
+
         const PREFIX: &str = "/write_data/";
-        let (entry_str, remaining_pointer) = &err.source.pointer[PREFIX.len()..]
+        let (entry_str, remaining_pointer) = &source.pointer[PREFIX.len()..]
             .split_once('/')
             .expect("error pointer");
         let entry: usize = entry_str
@@ -148,7 +188,7 @@ fn remove_invalid_entries_from_chunk(
         println!(
             "server validation error on (CSV) line {}: {} Remaining pointer '{}' failed payload:\n{}",
             row_line_number,
-            err.detail,
+            detail,
             remaining_pointer,
             serde_json::to_string_pretty(&row).unwrap(),
         );

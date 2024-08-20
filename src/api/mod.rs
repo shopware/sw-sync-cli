@@ -263,7 +263,7 @@ impl SwClient {
 
         if !response.status().is_success() {
             let status = response.status();
-            let body: serde_json::Value = Self::deserialize(response)?;
+            let body: SwErrorBody = Self::deserialize(response)?;
             return Err(SwApiError::AuthFailed(
                 status,
                 serde_json::to_string_pretty(&body)?,
@@ -326,7 +326,7 @@ impl SwClient {
         &self,
         request_builder: RequestBuilder,
     ) -> Result<Response, SwApiError> {
-        let mut retry_count = 0;
+        let mut try_count = 0;
         const MAX_RETRIES: u8 = 1;
         let binding = request_builder.try_clone().unwrap().build().unwrap();
         let path = binding.url().path();
@@ -341,7 +341,7 @@ impl SwClient {
             let start_time = Instant::now();
             let response = request.send()?;
 
-            if response.status() == StatusCode::UNAUTHORIZED && retry_count < MAX_RETRIES {
+            if response.status() == StatusCode::UNAUTHORIZED && try_count < MAX_RETRIES {
                 // lock the access token
                 let mut access_token_guard = self.access_token.lock().unwrap();
                 // compare the access token with the one we used to make the request
@@ -355,7 +355,7 @@ impl SwClient {
                 let new_token = auth_response.access_token;
                 *access_token_guard = new_token;
 
-                retry_count += 1;
+                try_count += 1;
                 continue;
             }
 
@@ -427,12 +427,35 @@ pub struct SwErrorBody {
     pub errors: Vec<SwError>,
 }
 
+impl SwErrorBody {
+    pub fn check_for_error_code(&self, error_code: &str) -> bool {
+        self.errors.iter().any(|error| match error {
+            SwError::GenericError { code, .. } if code.eq(error_code) => true,
+            SwError::WriteError { code, .. } if code.eq(error_code) => true,
+            _ => false,
+        })
+    }
+}
+
 #[derive(Debug, Deserialize, Serialize)]
-pub struct SwError {
-    pub code: String,
-    pub detail: String,
-    pub source: SwErrorSource,
-    pub template: String,
+#[serde(untagged)]
+pub enum SwError {
+    WriteError {
+        code: String,
+        detail: String,
+        source: SwErrorSource,
+        template: String,
+    },
+    GenericError {
+        code: String,
+        detail: Option<String>,
+        status: String,
+        title: String,
+    },
+}
+
+impl SwError {
+    pub const ERROR_CODE_DEADLOCK: &'static str = "1213";
 }
 
 #[derive(Debug, Deserialize, Serialize)]
