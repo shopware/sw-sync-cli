@@ -1,4 +1,5 @@
 # NEXT-RELEASE
+- NEXT-37310 - Added single row import strategy when encountering an error that cannot be handled automatically during a chunk import.
 
 # v0.8.0
 
