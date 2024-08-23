@@ -524,8 +524,9 @@ pub type Entity = serde_json::Map<String, serde_json::Value>;
 
 #[cfg(test)]
 mod tests {
-    use crate::api::CurrencyList;
-    use crate::api::IsoLanguageList;
+    use super::*;
+    use crate::config_file::Credentials;
+    use mockito::ServerGuard;
     use std::collections::HashMap;
 
     #[test]
@@ -580,5 +581,120 @@ mod tests {
             "cae49554610b4df2be0fbd61be51f66d"
         );
         assert_eq!(currency_list.get_currency_id_by_iso_code("GBP"), "");
+    }
+
+    #[test]
+    fn test_sw_client_auth() {
+        let mut server = mockito::Server::new();
+
+        let base_url = server.url();
+        let credentials = Credentials {
+            base_url,
+            access_key_id: "access_key_id".to_string(),
+            access_key_secret: "access_key_secret".to_string(),
+        };
+
+        let mock = server
+            .mock("POST", "/api/oauth/token")
+            .match_header("content-type", "application/json")
+            .match_body(mockito::Matcher::Json(
+                serde_json::to_value(&AuthBody {
+                    grant_type: "client_credentials".to_string(),
+                    client_id: credentials.access_key_id.clone(),
+                    client_secret: credentials.access_key_secret.clone(),
+                })
+                .unwrap(),
+            ))
+            .with_header("content-type", "application/json")
+            .with_body(
+                r#"{
+                "access_token": "access_token"
+            }"#,
+            )
+            .create();
+
+        // client new also authenticates
+        let client = SwClient::new(credentials).unwrap();
+        mock.assert();
+
+        assert_eq!(client.access_token.lock().unwrap().as_str(), "access_token");
+    }
+
+    fn create_shopware_mock_server() -> (ServerGuard, SwClient) {
+        let mut server = mockito::Server::new();
+
+        let base_url = server.url();
+        let credentials = Credentials {
+            base_url,
+            access_key_id: "access_key_id".to_string(),
+            access_key_secret: "access_key_secret".to_string(),
+        };
+
+        let mock = server
+            .mock("POST", "/api/oauth/token")
+            .match_header("content-type", "application/json")
+            .match_body(mockito::Matcher::Json(
+                serde_json::to_value(&AuthBody {
+                    grant_type: "client_credentials".to_string(),
+                    client_id: credentials.access_key_id.clone(),
+                    client_secret: credentials.access_key_secret.clone(),
+                })
+                .unwrap(),
+            ))
+            .with_header("content-type", "application/json")
+            .with_body(
+                r#"{
+                "access_token": "access_token"
+            }"#,
+            )
+            .create();
+
+        let client = SwClient::new(credentials).unwrap();
+        mock.assert();
+        (server, client)
+    }
+
+    #[test]
+    fn test_sw_client_entity_schema() {
+        let (mut server, client) = create_shopware_mock_server();
+
+        let mock = server
+            .mock("GET", "/api/_info/entity-schema.json")
+            .with_header("content-type", "application/json")
+            .with_body_from_file("./fixtures/entity-schema-2024-08-01.json")
+            .create();
+
+        let schema = client.entity_schema().unwrap();
+        mock.assert();
+
+        let expected_schema: Entity = serde_json::from_str(
+            &std::fs::read_to_string("./fixtures/entity-schema-2024-08-01.json").unwrap(),
+        )
+        .unwrap();
+        assert_eq!(schema, expected_schema);
+    }
+
+    #[test]
+    fn test_sw_client_get_total() {
+        let (mut server, client) = create_shopware_mock_server();
+
+        let mock = server
+            .mock("POST", "/api/search/product-manufacturer")
+            .with_header("content-type", "application/json")
+            .with_body(
+                r#"{
+                "aggregations": {
+                    "count": {
+                        "count": 42
+                    }
+                }
+            }"#,
+            )
+            .create();
+
+        let total = client.get_total("product_manufacturer", &[]).unwrap();
+        mock.assert();
+
+        assert_eq!(total, 42);
     }
 }
