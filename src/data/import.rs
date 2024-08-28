@@ -106,6 +106,30 @@ fn sync_chunk(
     mut chunk: Vec<Entity>,
     context: &Arc<SyncContext>,
 ) -> anyhow::Result<()> {
+    if let Ok(()) = attempt_chunk_sync_with_retries(row_indices, &mut chunk, context) {
+        return Ok(());
+    }
+
+    println!("chunk import failed; starting with single row import to filter faulty rows");
+
+    for (entity, index) in chunk.into_iter().zip(row_indices.iter()) {
+        match attempt_chunk_sync_with_retries(row_indices, &mut vec![entity], context) {
+            Ok(_) => {}
+            Err(error) => {
+                println!("{error:?}");
+                println!("invalid entry at row {index} will be skipped");
+            }
+        }
+    }
+
+    Ok(())
+}
+
+fn attempt_chunk_sync_with_retries(
+    row_indices: &[usize],
+    chunk: &mut Vec<Entity>,
+    context: &Arc<SyncContext>,
+) -> anyhow::Result<()> {
     let mut try_count = context.try_count.get();
     loop {
         if try_count == 0 {
@@ -115,7 +139,7 @@ fn sync_chunk(
         let (error_status, error_body) =
             match context
                 .sw_client
-                .sync(&context.profile.entity, SyncAction::Upsert, &chunk)
+                .sync(&context.profile.entity, SyncAction::Upsert, chunk)
             {
                 Ok(()) => {
                     return Ok(());
@@ -138,7 +162,7 @@ fn sync_chunk(
                     .any(|e| matches!(e, SwError::WriteError { .. })) =>
             {
                 println!("write error occurred; retry initialized");
-                remove_invalid_entries_from_chunk(row_indices, &mut chunk, body);
+                remove_invalid_entries_from_chunk(row_indices, chunk, body);
 
                 if chunk.is_empty() {
                     return Ok(());
@@ -197,6 +221,10 @@ fn remove_invalid_entries_from_chunk(
 
     // sort descending to remove by index
     to_be_removed.sort_unstable_by(|a, b| b.cmp(a));
+
+    // filtering duplicate rows
+    to_be_removed.dedup();
+
     for index in to_be_removed {
         chunk.remove(index);
     }
