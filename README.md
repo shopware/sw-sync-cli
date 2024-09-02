@@ -27,7 +27,7 @@ A CLI tool that communicates with the [Shopware admin API](https://shopware.stop
 
 ## Installation
 
-#### With Cargo ([Rust toolchain](https://www.rust-lang.org/learn/get-started))
+### With Cargo ([Rust toolchain](https://www.rust-lang.org/learn/get-started))
 
 ```bash
 cargo install sw-sync-cli
@@ -35,12 +35,12 @@ cargo install sw-sync-cli
 
 Same command can be used for updates. See [crate](https://crates.io/crates/sw-sync-cli)
 
-#### Manual
+### Manual
 
 head to [GitHub releases](https://github.com/shopware/sw-sync-cli/releases) and download the right binary for your operating system.
 Then either execute the binary directly or put it in your `PATH`.
 
-#### Build it from this repository
+### Build it from this repository
 
 1. Clone this repository
 2. Have the latest [Rust toolchain](https://www.rust-lang.org/learn/get-started) installed
@@ -49,19 +49,46 @@ Then either execute the binary directly or put it in your `PATH`.
 
 ## Usage
 
+> [!Note]
+> If you are running the CLI tool with cargo, you can call all the below commands with `cargo run <command>`, e.g. `cargo run auth`
+
+### Authentication
+
 1. Set up an [integration](https://docs.shopware.com/en/shopware-6-en/settings/system/integrationen?category=shopware-6-en/settings/system) inside shopware.
-2. Call `sw-sync-cli auth` with the required arguments (credentials)
+2. Call `sw-sync-cli auth` with the required arguments (credentials), for example:
+
+```bash
+sw-sync-cli auth -d https://your-shopware-url.com -i your-integration-id -s your-integration-secret
+```
 
 > [!WARNING]  
 > This will create a `.credentials.toml` file in your current working directory.
 > This file contains your credentials in plain text, you might want to remove it again after you are done syncing.
 
-3. Call `sw-sync-cli sync` in either `-m import` or `-m export` mode, with a profile (`profile.yaml`) and data file `data.csv`
+### Copying default profiles
+
+You can copy the default profiles to your current working directory by calling:
+
+```bash
+sw-sync-cli copy-profiles
+```
+
+This will create a `profiles` folder in your current working directory with all the default profiles. You can then adapt them to your needs.
+
+### Syncing
+
+Call `sw-sync-cli sync` in either `-m import` or `-m export` mode, with a profile (`profile.yaml`) and data file `data.csv` as arguments, for example:
+
+```bash
+sw-sync-cli sync -m import -p profiles/product.yaml -f data.csv
+sw-sync-cli sync -m export -p profiles/product.yaml -f data.csv
+```
+
 
 > [!Note]  
 > You can call `sw-sync-cli help` at any time to get more information
 
-#### Profiles
+### Profiles
 
 Profiles are used to define the mapping between (CSV) file columns and Shopware entity fields, as well as additional configuration for the import / export.
 To get started take a look at [Profiles in this repository](https://github.com/shopware/sw-sync-cli/tree/main/profiles).
@@ -165,6 +192,26 @@ deserialize_script: |
   // For a specific currency id you can use the get_currency_by_iso function:
   let eur_currency_id = get_currency_by_iso("EUR"); // It will return the currency id for "EUR"
 ```
+
+### Serialization / Deserialization scripts
+These are optional scripts where you can run more complex serialization/deserialization logic for your specific use case. These scripts are written in the [Rhai scripting language](https://rhai.rs/book/).
+The scripts are executed once per entity.
+
+For serialization, you receive the entity object and an empty row object which you can populate. For deserialization, you receive the row object and an empty entity object which you can populate. The keys you set in the entity/row object should match the keys you defined in the mappings section. The other simple mappings are executed after these scripts.
+
+There are some utility functions available in the scripts:
+- `get_default(key: string) -> string`: Returns the default value for the given key. The following keys are available:
+  - `LANGUAGE_SYSTEM`: Returns the default language id
+  - `LVE_VERSION`: Returns the live version id
+  - `CURRENCY`: Returns the default currency id
+  - `SALES_CHANNEL_TYPE_API`: Returns the sales channel type id for the API
+  - `SALES_CHANNEL_TYPE_STOREFRONT`: Returns the sales channel type id for the storefront
+  - `SALES_CHANNEL_TYPE_PRODUCT_COMPARISON`: Returns the sales channel type id for the product comparison
+  - `STORAGE_DATE_TIME_FORMAT`: Returns the date time format
+  - `STORAGE_DATE_FORMAT`: Returns the date format
+  - `CMS_PRODUCT_DETAIL_PAGE`: Returns the CMS product detail page id
+- `get_language_by_iso(iso: string) -> string`: Returns the language id for the given ISO code
+- `get_currency_by_iso(iso: string) -> string`: Returns the currency id for the given ISO code
 
 ## License
 
