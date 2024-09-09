@@ -11,10 +11,9 @@ mappings:
     entity_path: "languageId"
   - file_column: "sales channel id"
     entity_path: "salesChannelId"
-  - file_column: "state id"
-    entity_path: "stateId"
   - file_column: "order number"
-    key: "order_number"
+    entity_path: "orderNumber"
+    column_type: "string"
   - file_column: "currency factor"
     entity_path: "currencyFactor"
   - file_column: "order date time"
@@ -38,7 +37,8 @@ mappings:
   - file_column: "billing address street"
     entity_path: "billingAddress?.street"
   - file_column: "billing address zip code"
-    key: "billing_address_zipcode"
+    entity_path: "billingAddress?.zipcode"
+    column_type: "string"
   - file_column: "billing address company"
     entity_path: "billingAddress?.company"
   - file_column: "billing address city"
@@ -73,14 +73,19 @@ mappings:
     key: "price_position_price"
   - file_column: "price tax rates"
     key: "price_tax_rates"
+    column_type: "string"
   - file_column: "price tax percentages"
     key: "price_tax_percentages"
+    column_type: "string"
   - file_column: "price calculated taxes"
     key: "price_calculated_taxes"
+    column_type: "string"
   - file_column: "price calculated tax prices"
     key: "price_calculated_tax_prices"
+    column_type: "string"
   - file_column: "price calculated tax rates"
     key: "price_calculated_tax_rates"
+    column_type: "string"
   - file_column: "shipping cost quantity"
     key: "shipping_cost_quantity"
   - file_column: "shipping cost unit price"
@@ -89,14 +94,19 @@ mappings:
     key: "shipping_cost_total_price"
   - file_column: "shipping cost tax rates"
     key: "shipping_cost_tax_rates"
+    column_type: "string"
   - file_column: "shipping cost tax percentages"
     key: "shipping_cost_tax_percentages"
+    column_type: "string"
   - file_column: "shipping cost calculated taxes"
     key: "shipping_cost_calculated_taxes"
+    column_type: "string"
   - file_column: "shipping cost calculated tax prices"
     key: "shipping_cost_calculated_tax_prices"
+    column_type: "string"
   - file_column: "shipping cost calculated tax rates"
     key: "shipping_cost_calculated_tax_rates"
+    column_type: "string"
 
 serialize_script: |
   fn encode_values(arr, value_name) {
@@ -114,8 +124,6 @@ serialize_script: |
   }
 
   row = #{
-    order_number: entity.orderNumber,
-    billing_address_zipcode: entity.billingAddress?.zipcode,
     item_rounding_decimals: entity.itemRounding?.decimals,
     item_rounding_interval: entity.itemRounding?.interval,
     item_rounding_round_for_net: entity.itemRounding?.roundForNet,
@@ -214,10 +222,6 @@ deserialize_script: |
   }
 
   entity = #{
-    orderNumber: `${row.order_number}`, // TODO: fix conversion (NEXT-37536)
-    billingAddress: #{
-      zipcode: `${row.billing_address_zipcode}`, // TODO: fix conversion (NEXT-37536)
-    },
     itemRounding: #{
       decimals: row.item_rounding_decimals,
       interval: row.item_rounding_interval,

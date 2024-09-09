@@ -132,6 +132,7 @@ impl Mapping {
 pub struct EntityPathMapping {
     pub file_column: String,
     pub entity_path: String,
+    pub column_type: Option<ColumnType>,
 }
 
 #[derive(Debug, Clone, Default, Eq, PartialEq, Deserialize)]
@@ -139,6 +140,15 @@ pub struct EntityScriptMapping {
     pub file_column: String,
     /// used as an identifier inside the script
     pub key: String,
+    pub column_type: Option<ColumnType>,
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ColumnType {
+    String,
+    Number,
+    Boolean,
 }
 
 #[cfg(test)]

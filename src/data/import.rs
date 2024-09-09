@@ -4,7 +4,7 @@ use crate::api::filter::Criteria;
 use crate::api::{Entity, SwApiError, SwError, SwErrorBody, SyncAction};
 use crate::data::transform::deserialize_row;
 use crate::SyncContext;
-use anyhow::anyhow;
+use anyhow::{anyhow, Context};
 use csv::StringRecord;
 use itertools::Itertools;
 use std::sync::Arc;
@@ -55,10 +55,10 @@ fn process_file_chunk(
             let headers = &headers;
             s.spawn_fifo(move |_| {
                 println!("sync chunk {first_index}..={last_index} (size={chunk_length}) is now being deserialized");
-                let entity_chunk = match deserialize_chunk(headers, records_chunk, &context_clone) {
+                let entity_chunk = match deserialize_chunk(headers, first_index, records_chunk, &context_clone) {
                     Ok(chunk) => chunk,
                     Err(e) => {
-                        println!("sync chunk {first_index}..={last_index} (size={chunk_length}) failed to deserialize:\n{e}");
+                        println!("sync chunk {first_index}..={last_index} (size={chunk_length}) failed to deserialize:\n{e:#}");
                         return;
                     }
                 };
@@ -76,24 +76,21 @@ fn process_file_chunk(
 
 fn deserialize_chunk(
     headers: &StringRecord,
+    first_index: usize,
     records_chunk: Vec<Result<StringRecord, csv::Error>>,
     context: &Arc<SyncContext>,
 ) -> anyhow::Result<Vec<Entity>> {
     let mut entities: Vec<Entity> = Vec::with_capacity(Criteria::MAX_LIMIT);
-    for record in records_chunk {
+    for (record_counter, record) in records_chunk.into_iter().enumerate() {
         let record = record?; // fail on first CSV read failure
 
-        let entity = match deserialize_row(
+        let entity = deserialize_row(
             headers,
             &record,
             &context.profile,
             &context.scripting_environment,
-        ) {
-            Ok(e) => e,
-            Err(e) => {
-                return Err(e);
-            }
-        };
+        )
+        .with_context(|| format!("error in row {}", record_counter + first_index))?;
 
         entities.push(entity);
     }

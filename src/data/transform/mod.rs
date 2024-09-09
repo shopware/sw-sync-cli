@@ -3,7 +3,7 @@
 pub mod script;
 
 use crate::api::Entity;
-use crate::config_file::{Mapping, Profile};
+use crate::config_file::{ColumnType, Mapping, Profile};
 use crate::data::ScriptingEnvironment;
 use anyhow::Context;
 use csv::StringRecord;
@@ -35,7 +35,11 @@ pub fn deserialize_row(
                 let raw_value = row
                     .get(column_index)
                     .context("failed to get column of row")?;
-                let json_value = get_json_value_from_string(raw_value);
+
+                let json_value = get_json_value_from_string(raw_value, &path_mapping.column_type)
+                    .with_context(|| {
+                    format!("error in column \"{}\"", &headers[column_index])
+                })?;
 
                 entity.insert_by_path(&path_mapping.entity_path, json_value);
             }
@@ -99,18 +103,33 @@ pub fn serialize_entity(
     Ok(row)
 }
 
-fn get_json_value_from_string(raw_input: &str) -> serde_json::Value {
+fn get_json_value_from_string(
+    raw_input: &str,
+    column_type: &Option<ColumnType>,
+) -> anyhow::Result<serde_json::Value> {
     let raw_input_lowercase = raw_input.to_lowercase();
-    if raw_input_lowercase == "null" || raw_input.trim().is_empty() {
-        serde_json::Value::Null
-    } else if raw_input_lowercase == "true" {
-        serde_json::Value::Bool(true)
-    } else if raw_input_lowercase == "false" {
-        serde_json::Value::Bool(false)
-    } else if let Ok(number) = serde_json::Number::from_str(raw_input) {
-        serde_json::Value::Number(number)
-    } else {
-        serde_json::Value::String(raw_input.to_owned())
+
+    match (raw_input_lowercase.as_str(), column_type) {
+        (_, Some(ColumnType::String)) => Ok(serde_json::Value::String(raw_input.to_owned())),
+        (_, Some(ColumnType::Number)) =>
+            serde_json::Number::from_str(raw_input)
+                .map(serde_json::Value::Number)
+                .map_err(|_| anyhow::anyhow!("failed to convert {raw_input} into a number; make sure that you use the column types correctly")),
+        (_, Some(ColumnType::Boolean)) =>
+            raw_input.parse::<bool>()
+                .map(serde_json::Value::Bool)
+                .map_err(|_| anyhow::anyhow!("failed to convert {raw_input} into a boolean; make sure that you use the column types correctly")),
+        ("null", _) => Ok(serde_json::Value::Null),
+        ("true", _) => Ok(serde_json::Value::Bool(true)),
+        ("false", _) => Ok(serde_json::Value::Bool(false)),
+        (input, _) if input.trim().is_empty() => Ok(serde_json::Value::Null),
+        _ => {
+            if let Ok(number) = serde_json::Number::from_str(raw_input) {
+                Ok(serde_json::Value::Number(number))
+            } else {
+                Ok(serde_json::Value::String(raw_input.to_owned()))
+            }
+        },
     }
 }
 
@@ -220,6 +239,7 @@ impl EntityPath for Entity {
 
 #[cfg(test)]
 mod tests {
+    use crate::config_file::ColumnType;
     use crate::data::transform::{get_json_value_from_string, EntityPath};
     use serde_json::{json, Number, Value};
 
@@ -411,21 +431,107 @@ mod tests {
 
     #[test]
     fn test_get_json_value_from_string() {
-        let value = get_json_value_from_string("null");
-        assert_eq!(value, json!(null));
-        let value = get_json_value_from_string("");
-        assert_eq!(value, json!(null));
+        #[derive(Debug)]
+        struct TestCase {
+            name: &'static str,
+            raw_input: String,
+            expect: ExpectResult,
+            column_type: Option<ColumnType>,
+        }
 
-        let value = get_json_value_from_string("true");
-        assert_eq!(value, json!(true));
+        #[derive(Debug)]
+        enum ExpectResult {
+            Failure,
+            Value(Value),
+        }
 
-        let value = get_json_value_from_string("false");
-        assert_eq!(value, json!(false));
+        let test_cases = [
+            TestCase {
+                name: "converting: 'null', expect: null",
+                raw_input: String::from("null"),
+                expect: ExpectResult::Value(json!(null)),
+                column_type: None,
+            },
+            TestCase {
+                name: "converting: 'null', type: string, expect: 'null'",
+                raw_input: String::from("null"),
+                expect: ExpectResult::Value(json!("null")),
+                column_type: Some(ColumnType::String),
+            },
+            TestCase {
+                name: "converting: '', expect: null",
+                raw_input: String::from(""),
+                expect: ExpectResult::Value(json!(null)),
+                column_type: None,
+            },
+            TestCase {
+                name: "converting: 'true', expect: true",
+                raw_input: String::from("true"),
+                expect: ExpectResult::Value(json!(true)),
+                column_type: None,
+            },
+            TestCase {
+                name: "converting: 'true', type: Boolean, expect: true",
+                raw_input: String::from("true"),
+                expect: ExpectResult::Value(json!(true)),
+                column_type: Some(ColumnType::Boolean),
+            },
+            TestCase {
+                name: "converting: 'false', expect: false",
+                raw_input: String::from("false"),
+                expect: ExpectResult::Value(json!(false)),
+                column_type: None,
+            },
+            TestCase {
+                name: "converting: 'false', type: Boolean, expect: false",
+                raw_input: String::from("false"),
+                expect: ExpectResult::Value(json!(false)),
+                column_type: Some(ColumnType::Boolean),
+            },
+            TestCase {
+                name: "converting: '42.42', expect: 42.42",
+                raw_input: String::from("42.42"),
+                expect: ExpectResult::Value(json!(42.42)),
+                column_type: None,
+            },
+            TestCase {
+                name: "converting: 'my string', expect: 'my string'",
+                raw_input: String::from("my string"),
+                expect: ExpectResult::Value(json!("my string")),
+                column_type: None,
+            },
+            TestCase {
+                name: "converting: 'my string', type: String, expect: 'my string'",
+                raw_input: String::from("my string"),
+                expect: ExpectResult::Value(json!("my string")),
+                column_type: Some(ColumnType::String),
+            },
+            TestCase {
+                name: "converting: 'my string', type: Number, expect: Failure",
+                raw_input: String::from("my string"),
+                expect: ExpectResult::Failure,
+                column_type: Some(ColumnType::Number),
+            },
+            TestCase {
+                name: "converting: 'my string', type: Boolean, expect: Failure",
+                raw_input: String::from("my string"),
+                expect: ExpectResult::Failure,
+                column_type: Some(ColumnType::Boolean),
+            },
+        ];
 
-        let value = get_json_value_from_string("42.42");
-        assert_eq!(value, json!(42.42));
+        for test_case in test_cases {
+            let value = get_json_value_from_string(&test_case.raw_input, &test_case.column_type);
 
-        let value = get_json_value_from_string("my string");
-        assert_eq!(value, json!("my string"));
+            match test_case.expect {
+                ExpectResult::Failure => {
+                    assert!(value.is_err(), "{}", test_case.name);
+                }
+                ExpectResult::Value(expected) => {
+                    assert!(value.is_ok(), "{}", test_case.name);
+                    assert_eq!(value.unwrap(), expected, "{}", test_case.name);
+                }
+            }
+        }
     }
 }
