@@ -30,10 +30,12 @@ A CLI tool that communicates with the [Shopware admin API](https://shopware.stop
 ### With Cargo ([Rust toolchain](https://www.rust-lang.org/learn/get-started))
 
 ```bash
-cargo install sw-sync-cli
+cargo install sw-sync-cli --locked
 ```
 
-Same command can be used for updates. See [crate](https://crates.io/crates/sw-sync-cli)
+Same command can be used for updates.
+This command will build the executable (in release mode) and put it into your `PATH` (where all cargo binaries are).
+See [crate](https://crates.io/crates/sw-sync-cli)
 
 ### Manual
 
@@ -49,8 +51,8 @@ Then either execute the binary directly or put it in your `PATH`.
 
 ## Usage
 
-> [!Note]
-> If you are running the CLI tool with cargo, you can call all the below commands with `cargo run <command>`, e.g. `cargo run auth`
+> [!Note]  
+> You can call `sw-sync-cli help` at any time to get more information
 
 ### Authentication
 
@@ -84,9 +86,9 @@ sw-sync-cli sync -m import -p profiles/product.yaml -f data.csv
 sw-sync-cli sync -m export -p profiles/product.yaml -f data.csv
 ```
 
-
-> [!Note]  
-> You can call `sw-sync-cli help` at any time to get more information
+> [!Note]
+> If you checked out this repository e.g. to make Rust code changes, you can also call all the above commands with `cargo run <command>`, e.g. `cargo run auth`.
+> Note this way is only suggested for developers / contributors to this project.
 
 ### Profiles
 
