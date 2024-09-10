@@ -128,6 +128,8 @@ mappings:
     entity_path: "name"
   - file_column: "product number"
     entity_path: "productNumber"
+    # column type defines the data type for the internal processing of the column data
+    colum_type: "string"
   - file_column: "stock"
     entity_path: "stock"
   - file_column: "tax id"

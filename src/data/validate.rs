@@ -50,6 +50,7 @@ pub fn validate_paths_for_entity(
         let mapping = Mapping::ByPath(EntityPathMapping {
             file_column: path_mapping.file_column.clone(),
             entity_path: path,
+            column_type: path_mapping.column_type.clone(),
         });
 
         // validate the new mapping
@@ -70,6 +71,7 @@ mod tests {
         let mapping = vec![Mapping::ByPath(EntityPathMapping {
             file_column: "manufacturer id".to_string(),
             entity_path: "manufacturerId".to_string(),
+            column_type: None,
         })];
         let api_schema = json!({
             "product": {
@@ -93,6 +95,7 @@ mod tests {
         let mapping = vec![Mapping::ByPath(EntityPathMapping {
             file_column: "manufacturer id".to_string(),
             entity_path: "manufacturerId".to_string(),
+            column_type: None,
         })];
         let api_schema = json!({
             "product": {
@@ -116,6 +119,7 @@ mod tests {
         let mapping = vec![Mapping::ByPath(EntityPathMapping {
             file_column: "manufacturer id".to_string(),
             entity_path: "manufacturerId".to_string(),
+            column_type: None,
         })];
         let api_schema = json!({
             "product": {
@@ -143,6 +147,7 @@ mod tests {
         let mapping = vec![Mapping::ByPath(EntityPathMapping {
             file_column: "manufacturer name".to_string(),
             entity_path: "manufacturer.name".to_string(),
+            column_type: None,
         })];
         let api_schema = json!({
             "product": {
@@ -172,6 +177,7 @@ mod tests {
         let mapping = vec![Mapping::ByPath(EntityPathMapping {
             file_column: "manufacturer name".to_string(),
             entity_path: "manufacturer.name".to_string(),
+            column_type: None,
         })];
         let api_schema = json!({
             "product": {
@@ -208,6 +214,7 @@ mod tests {
         let mapping = vec![Mapping::ByPath(EntityPathMapping {
             file_column: "manufacturer name".to_string(),
             entity_path: "manufacturer?.name".to_string(),
+            column_type: None,
         })];
         let api_schema = json!({
             "product": {
@@ -244,6 +251,7 @@ mod tests {
         let mapping = vec![Mapping::ByPath(EntityPathMapping {
             file_column: "manufacturer name".to_string(),
             entity_path: "manufacturer?.name".to_string(),
+            column_type: None,
         })];
         let api_schema = json!({
             "product": {
@@ -282,6 +290,7 @@ mod tests {
         let mapping = vec![Mapping::ByPath(EntityPathMapping {
             file_column: "tax country".to_string(),
             entity_path: "tax.country.name".to_string(),
+            column_type: None,
         })];
         let api_schema = json!({
             "product": {

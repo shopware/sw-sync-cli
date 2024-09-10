@@ -18,14 +18,9 @@ mappings:
   - file_column: "sorter key"
     entity_path: "sorterKey"
   - file_column: "applier key"
-    key: "applier_key"
+    entity_path: "applierKey"
+    column_type: "string"
   - file_column: "usage key"
     entity_path: "usageKey"
   - file_column: "picker key"
     entity_path: "pickerKey"
-
-serialize_script: |
-  row.applier_key = entity.applierKey;
-
-deserialize_script: |
-  entity.applierKey = `${row.applier_key}`; // TODO: fix conversion (NEXT-37536)

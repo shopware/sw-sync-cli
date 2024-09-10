@@ -45,7 +45,8 @@ impl ScriptingEnvironment {
                 .get(column_index)
                 .context("failed to get column of row")?;
 
-            let json_value = get_json_value_from_string(raw_value);
+            let json_value = get_json_value_from_string(raw_value, &mapping.column_type)?;
+
             let script_value = rhai::serde::to_dynamic(json_value)
                 .context("failed to convert CSV value into script value")?;
 
@@ -326,10 +327,12 @@ mod tests {
                 Mapping::ByScript(EntityScriptMapping {
                     file_column: "bar".to_string(),
                     key: "bar_key".to_string(),
+                    column_type: None,
                 }),
                 Mapping::ByScript(EntityScriptMapping {
                     file_column: "number + 1".to_string(),
                     key: "number_plus_one".to_string(),
+                    column_type: None,
                 }),
             ],
             ..Default::default()

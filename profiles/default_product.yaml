@@ -23,6 +23,7 @@ mappings:
     entity_path: "cover"
   - file_column: "product number"
     entity_path: "productNumber"
+    column_type: "string"
   - file_column: "active"
     entity_path: "active"
   - file_column: "stock"

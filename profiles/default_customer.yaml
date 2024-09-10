@@ -16,7 +16,8 @@ mappings:
   - file_column: "account type"
     entity_path: "accountType"
   - file_column: "customer number"
-    key: "customer_number"
+    entity_path: "customerNumber"
+    column_type: "string"
   - file_column: "first name"
     entity_path: "firstName"
   - file_column: "last name"
@@ -52,7 +53,8 @@ mappings:
   - file_column: "default billing address street"
     entity_path: "defaultBillingAddress?.street"
   - file_column: "default billing address zip code"
-    key: "default_billing_address_zip_code"
+    entity_path: "defaultBillingAddress?.zipcode"
+    column_type: "string"
   - file_column: "default billing address city"
     entity_path: "defaultBillingAddress?.city"
   - file_column: "default billing address country id"
@@ -74,7 +76,8 @@ mappings:
   - file_column: "default shipping address street"
     entity_path: "defaultShippingAddress?.street"
   - file_column: "default shipping address zip code"
-    key: "default_shipping_address_zip_code"
+    entity_path: "defaultShippingAddress?.zipcode"
+    column_type: "string"
   - file_column: "default shipping address city"
     entity_path: "defaultShippingAddress?.city"
   - file_column: "default shipping address country id"
@@ -90,9 +93,6 @@ mappings:
 
 serialize_script: |
   row = #{
-    customer_number: entity.customerNumber,
-    default_billing_address_zip_code: entity.defaultBillingAddress?.zipCode,
-    default_shipping_address_zip_code: entity.defaultShippingAddress?.zipCode,
     default_group_name: entity.group.translated?.name,
     default_sales_channel_name: entity.salesChannel.translated?.name,
     default_payment_method_name: entity.defaultPaymentMethod.translated?.name
@@ -102,13 +102,6 @@ deserialize_script: |
   let default_language = get_default("LANGUAGE_SYSTEM");
 
   entity = #{
-    customerNumber: `${row.customer_number}`, // TODO: fix conversion (NEXT-37536)
-    defaultBillingAddress: #{
-      zipCode: `${row.default_billing_address_zip_code}`, // TODO: fix conversion (NEXT-37536)
-    },
-    defaultShippingAddress: #{
-      zipCode: `${row.default_shipping_address_zip_code}`, // TODO: fix conversion (NEXT-37536)
-    },
     group: #{
       translations: [#{
         languageId: default_language,

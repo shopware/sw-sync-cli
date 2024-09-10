@@ -26,10 +26,5 @@ mappings:
   - file_column: "hash"
     entity_path: "hash"
   - file_column: "zipCode"
-    key: "zip_code"
-
-serialize_script: |
-  row.zip_code = entity.zipCode;
-
-deserialize_script: |
-  entity.zipCode = `${row.zip_code}`; // TODO: fix conversion (NEXT-37536)
+    entity_path: "zipCode"
+    column_type: "string"
