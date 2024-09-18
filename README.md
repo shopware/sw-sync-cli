@@ -100,6 +100,7 @@ The structure of a profile `.yaml` is as follows:
 entity: product
 
 # optional filtering, only applied on export
+# maps to api filters, see https://developer.shopware.com/docs/resources/references/core-reference/dal-reference/filters-reference.html
 filter:
   # export main products (parentId = NULL) only
   - type: "equals"
@@ -150,8 +151,8 @@ mappings:
     key: "net_price_eur"
 
 # optional serialization script, which is called once per entity
+# documentation can be found here https://github.com/shopware/sw-sync-cli?tab=readme-ov-file#serialization--deserialization-scripts
 serialize_script: |
-  // See https://rhai.rs/book/ for scripting language documentation
   // you receive an entity object, which consists of the whole entity API response for that single entity
   // you also receive an empty row object where the specified keys above are missing (you need to set them)
   // the other simple mappings are executed (added to the row object) after this script
@@ -166,13 +167,14 @@ serialize_script: |
   row.gross_price_eur = price.gross;
   row.net_price_eur = price.net;
 
-# optional deserialization script, which is called once per entity
+# optional deserialization script, which is called once per file row
+# documentation can be found here https://github.com/shopware/sw-sync-cli?tab=readme-ov-file#serialization--deserialization-scripts
 deserialize_script: |
-  // See https://rhai.rs/book/ for scripting language documentation
-  // you receive 'row' as an object that has all the keys defined above with the corresponding value
+  // you receive 'row' as an object that has all the keys defined above with the corresponding value from the file row
   // you also receive an empty entity object, where you need to resolve your keys
   // the other simple mappings are executed (added to the entity object) after this script
 
+  // debugging utils
   // print(entity); // will be empty
   // debug(row); // will contain only the specified keys + their values
 
@@ -201,7 +203,10 @@ deserialize_script: |
 These are optional scripts where you can run more complex serialization/deserialization logic for your specific use case. These scripts are written in the [Rhai scripting language](https://rhai.rs/book/).
 The scripts are executed once per entity.
 
-For serialization, you receive the entity object and an empty row object which you can populate. For deserialization, you receive the row object and an empty entity object which you can populate. The keys you set in the entity/row object should match the keys you defined in the mappings section. The other simple mappings are executed after these scripts.
+For serialization, you receive the entity object and an empty row object which you can populate.
+For deserialization, you receive the row object and an empty entity object which you can populate.
+The keys you set in the entity/row object should match the keys you defined in the mappings section.
+The other simple mappings are executed after these scripts.
 
 There are some utility functions available in the scripts:
 - `get_default(key: string) -> string`: Returns the default value for the given key. The following keys are available:
