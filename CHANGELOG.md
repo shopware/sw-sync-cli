@@ -1,5 +1,8 @@
 # NEXT-RELEASE
-- NEXT-37536 - Added the profile mapping option `column_type` with which the column type can be specified if the inferred one leads to conversion t issues. Valid options are `string`, `number` and `boolean`.
+
+# v0.9.0
+
+- NEXT-37536 - Added the profile mapping option `column_type` with which the column type can be specified if the inferred one leads to conversion issues. Valid options are `string`, `number` and `boolean`.
 - NEXT-37310 - Added single row import strategy when encountering an error that cannot be handled automatically during a chunk import.
 
 # v0.8.0
