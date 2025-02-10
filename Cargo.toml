@@ -10,13 +10,13 @@ repository = "https://github.com/shopware/sw-sync-cli"
 license = "MIT"
 
 [dependencies]
-clap = { version = "4.5.27", features = ["derive", "string"] }
+clap = { version = "4.5.28", features = ["derive", "string"] }
 rayon = "1.10.0"
 reqwest = { version = "0.12.12", features = ["json", "blocking"] }
 serde = { version = "1.0.217", features = ["derive"] }
 serde_json = "1.0.138"
 serde_yaml = "0.9.33"
-toml = "0.8.19"
+toml = "0.8.20"
 thiserror = "2.0.11"
 anyhow = "1.0.95"
 csv = "1.3.1"
